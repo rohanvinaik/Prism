@@ -41,7 +41,7 @@ jobs:
         with:
           label: "Mutation Kill Rate"
           label-color: "333"
-          status: "${{ env.MUTATION_KILL_PCT }}% (${{ env.MUTATION_KILLED }}/${{ env.MUTATION_TOTAL }})"
+          status: "${{ env.MUTATION_KILL_PCT }}%"
           color: ${{ env.MUTATION_KILL_PCT == '100' && '2ea043' || 'e5534b' }}
           path: ".github/badges/mutation-kill-rate.svg"
 
@@ -62,6 +62,36 @@ jobs:
           status: "${{ env.TEST_COUNT }} (${{ env.TEST_RATIO }})"
           color: "2ea043"
           path: ".github/badges/test-count.svg"
+
+      - name: Compute sampling ratio
+        run: |
+          python3 -c "
+          tested = ${{ env.MUTATION_TOTAL }}
+          universe = ${{ env.MUTATION_UNIVERSE }}
+          if universe and universe > 0:
+              pct = round(100 * tested / universe, 1)
+              print(f'SAMPLING_RATIO={tested}/{universe} ({pct}%)')
+          else:
+              print(f'SAMPLING_RATIO={tested}/{tested} (100%)')
+          " | while read line; do echo "$line" >> "$GITHUB_ENV"; done
+
+      - name: Generate Mutation Sampling Badge
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: "Mutation Sampling"
+          label-color: "333"
+          status: "${{ env.SAMPLING_RATIO }}"
+          color: "0969da"
+          path: ".github/badges/mutation-sampling.svg"
+
+      - name: "Generate MC/DC Badge"
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: "MC/DC"
+          label-color: "333"
+          status: "${{ env.MCDC_STATUS }}"
+          color: ${{ env.MCDC_STATUS == 'Verified' && '2ea043' || 'e5534b' }}
+          path: ".github/badges/mcdc.svg"
 
       # ── Push to badges branch ────────────────────────────────────
 

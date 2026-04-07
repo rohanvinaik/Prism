@@ -8,6 +8,8 @@
 [![Mutation Kill Rate](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-kill-rate.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Mean σ](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/sigma.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Tests](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/test-count.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
+[![Mutation Sampling](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-sampling.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
+[![MC/DC](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mcdc.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 
 ## Setup
 
