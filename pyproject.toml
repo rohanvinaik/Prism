@@ -56,5 +56,14 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.wesker]
+source_dir = "src/prism"
+mcdc_targets = [
+    ["src/prism/behavior.py", "_infer_workflow_mode"],
+    ["src/prism/behavior.py", "_skew_warnings"],
+    ["src/prism/health.py", "_compute_score"],
+    ["src/prism/pr_ready.py", "assess"],
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

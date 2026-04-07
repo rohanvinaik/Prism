@@ -26,6 +26,13 @@ jobs:
           uv pip install git+https://github.com/rohanvinaik/Wesker.git
 
       # ── Wesker mutation testing ──────────────────────────────────
+      # MC/DC justification: No Python runtime MC/DC coverage tool exists.
+      # Wesker uses mutation-based MC/DC verification (ROR operator swaps
+      # on compound boolean conditions in scoring functions). This is a
+      # legitimate functional equivalent: Offutt & Voas (1996) formally
+      # prove mutation testing subsumes MC/DC, and Kaminski, Ammann &
+      # Offutt (2013) show ROR mutation is strictly stronger than MC/DC
+      # in fault detection power. Targets configured in [tool.wesker].
       - name: Run Wesker specification metrics
         run: uv run python -m Wesker.metrics
         env:
@@ -60,7 +67,7 @@ jobs:
           label: "Tests"
           label-color: "333"
           status: "${{ env.TEST_COUNT }} (${{ env.TEST_RATIO }})"
-          color: "2ea043"
+          color: "555"
           path: ".github/badges/test-count.svg"
 
       - name: Compute sampling ratio
@@ -81,7 +88,7 @@ jobs:
           label: "Mutation Sampling"
           label-color: "333"
           status: "${{ env.SAMPLING_RATIO }}"
-          color: "0969da"
+          color: "555"
           path: ".github/badges/mutation-sampling.svg"
 
       - name: "Generate MC/DC Badge"
