@@ -96,8 +96,8 @@ jobs:
         with:
           label: "MC/DC"
           label-color: "333"
-          status: "${{ env.MCDC_STATUS }}"
-          color: ${{ env.MCDC_STATUS == 'Verified' && '2ea043' || 'e5534b' }}
+          status: "${{ env.MCDC_STATUS }} (${{ env.MCDC_COVERED }}/${{ env.MCDC_TOTAL }})"
+          color: ${{ env.MCDC_STATUS == 'Verified' && '0ea5e9' || 'e5534b' }}
           path: ".github/badges/mcdc.svg"
 
       # ── Push to badges branch ────────────────────────────────────

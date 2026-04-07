@@ -4,13 +4,13 @@
 
 [![CI](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml/badge.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
 [![Tests](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/test-count.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Mutation Kill Rate](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-kill-rate.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 <br>
 [![MC/DC](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mcdc.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Mutation Sampling](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-sampling.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Mean σ](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/sigma.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
 
 ## Setup
 
