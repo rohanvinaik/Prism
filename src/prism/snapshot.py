@@ -65,6 +65,14 @@ def run(period: str = "today", project: str = "") -> str:
                 lines.append(f"- Code coherence: {traj[-1]}")
                 break
 
+    # Real-time hook data (bridge file has latest session efficiency)
+    bridge = engine.read_bridge()
+    if bridge:
+        eff = bridge.get("efficiency_score")
+        err_rate = bridge.get("error_rate", 0)
+        if eff is not None:
+            lines.append(f"- Session efficiency: {eff}/100 (error rate: {err_rate:.0%})")
+
     summary = "\n".join(lines)
 
     # -- Full data (written to disk) --

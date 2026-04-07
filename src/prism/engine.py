@@ -207,6 +207,32 @@ def read_daily_summaries(days: int = 7) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Bridge file (LintGate reads latest session efficiency)
+# ---------------------------------------------------------------------------
+
+BRIDGE_FILE = PRISM_DIR / "bridge.json"
+
+
+def write_bridge(efficiency: dict) -> None:
+    """Write latest session efficiency metrics for LintGate nudge system."""
+    _ensure_dirs()
+    efficiency["_meta"] = {
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "schema_version": SCHEMA_VERSION,
+    }
+    BRIDGE_FILE.write_text(json.dumps(efficiency, indent=2, default=str))
+
+
+def read_bridge() -> Optional[dict]:
+    if not BRIDGE_FILE.is_file():
+        return None
+    try:
+        return json.loads(BRIDGE_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Project health state (LintGate reads these)
 # ---------------------------------------------------------------------------
 

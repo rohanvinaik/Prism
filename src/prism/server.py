@@ -110,3 +110,7 @@ def prism_health(project_path: str = "") -> str:
     if not project_path:
         return "Error: project_path is required (MCP server cwd is not project-specific)."
     return health.run(project_path)
+
+
+def main():
+    mcp.run()

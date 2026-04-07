@@ -6,6 +6,7 @@ Deep dive into specific session(s) across all data sources.
 from collections import Counter
 
 from . import engine, sources
+from .engine import read_events, read_bridge
 
 
 def _session_compact(s: sources.SessionData) -> str:
@@ -79,6 +80,28 @@ def _session_full(s: sources.SessionData) -> dict:
                     "commands": len(in_range),
                     "saved": sum(c.get("saved_tokens", 0) for c in in_range),
                 }
+
+    # Hook-captured real-time data (richer than JSONL parsing)
+    hook_events = read_events(s.session_id)
+    if hook_events:
+        tool_hook_events = [e for e in hook_events if e.get("event") == "tool_use"]
+        hook_errors = sum(1 for e in tool_hook_events if e.get("error"))
+        total_output_bytes = sum(e.get("output_bytes", 0) for e in tool_hook_events)
+        compactions = sum(1 for e in hook_events if e.get("event") == "pre_compact")
+
+        data["realtime"] = {
+            "hook_events": len(hook_events),
+            "tool_calls_observed": len(tool_hook_events),
+            "errors_detected": hook_errors,
+            "error_rate": round(hook_errors / max(len(tool_hook_events), 1), 3),
+            "total_output_bytes": total_output_bytes,
+            "compactions": compactions,
+        }
+
+    # Bridge efficiency data (latest session metrics)
+    bridge = read_bridge()
+    if bridge and bridge.get("session_id") == s.session_id:
+        data["efficiency_score"] = bridge.get("efficiency_score")
 
     return data
 
