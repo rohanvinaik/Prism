@@ -2,6 +2,10 @@
 
 Compact-first pattern: each tool returns a tight summary + snapshot_id.
 Use prism_details(id) to drill into full results on demand.
+
+Project scoping: all analytics tools accept an optional `project` param
+(substring match on project name). Pass the current project name to scope
+results; leave empty for cross-project aggregate view.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -12,25 +16,25 @@ mcp = FastMCP(
     "Prism",
     instructions=(
         "Holographic Claude Code usage analytics. "
-        "6 tools: snapshot (quick composite), economics (token costs), "
-        "behavior (tool choreography), trajectory (trends), "
-        "forensics (session deep-dive), details (drill into any snapshot). "
+        "7 tools: snapshot, economics, behavior, trajectory, forensics, "
+        "details (drill-down), health (setup maturity). "
         "Each tool returns a compact summary + snapshot_id. "
         "Call prism_details(id, section) to drill into full data on demand. "
-        "All reads are read-only across RTK, Claude Code sessions, "
-        "LintGate, Continuity, and Mneme."
+        "IMPORTANT: Pass the current project name in the `project` param "
+        "to scope results to this project. Leave empty for global view."
     ),
 )
 
 
 @mcp.tool()
-def prism_snapshot(period: str = "today") -> str:
+def prism_snapshot(period: str = "today", project: str = "") -> str:
     """Quick multi-lens summary. Returns compact view + snapshot_id for drill-down.
 
     Args:
         period: today, week, month.
+        project: Filter to project name (substring match). Empty for all projects.
     """
-    return snapshot.run(period)
+    return snapshot.run(period, project)
 
 
 @mcp.tool()
@@ -56,13 +60,14 @@ def prism_behavior(period: str = "week", project: str = "") -> str:
 
 
 @mcp.tool()
-def prism_trajectory(period: str = "month") -> str:
+def prism_trajectory(period: str = "month", project: str = "") -> str:
     """Quality, decision, and cognitive trends over time.
 
     Args:
         period: week, month, quarter.
+        project: Filter to project name (substring match). Empty for all.
     """
-    return trajectory.run(period)
+    return trajectory.run(period, project)
 
 
 @mcp.tool()
@@ -100,12 +105,8 @@ def prism_health(project_path: str = "") -> str:
     Scores 0-100 and persists state for LintGate consumption.
 
     Args:
-        project_path: Absolute path to project root. Defaults to cwd.
+        project_path: Absolute path to project root.
     """
-    import os
-    path = project_path or os.getcwd()
-    return health.run(path)
-
-
-def main():
-    mcp.run()
+    if not project_path:
+        return "Error: project_path is required (MCP server cwd is not project-specific)."
+    return health.run(project_path)

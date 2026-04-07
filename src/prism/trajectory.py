@@ -88,13 +88,28 @@ def _decisions_data(since: Optional[datetime]) -> dict:
     }
 
 
-def run(period: str = "month") -> str:
+def run(period: str = "month", project: str = "") -> str:
     since = sources.period_to_since(period)
 
+    # stats-cache and LintGate metrics are global (not per-project).
+    # Continuity decisions can be filtered by project name.
     stats = sources.read_stats_cache()
     activity = _activity_data(stats, since) if stats else {}
     quality = _quality_data(since)
-    decisions = _decisions_data(since)
+    all_decisions = _decisions_data(since)
+    if project and all_decisions:
+        raw = sources.read_continuity_decisions(since=since)
+        matched = [d for d in raw if project.lower() in (d.get("project_name") or "").lower()]
+        if matched:
+            categories: dict[str, int] = defaultdict(int)
+            outcomes: dict[str, int] = defaultdict(int)
+            for d in matched:
+                categories[d.get("category", "unknown")] += 1
+                outcomes[d.get("outcome", "unknown")] += 1
+            all_decisions = {"total": len(matched), "by_category": dict(categories), "by_outcome": dict(outcomes)}
+        else:
+            all_decisions = {}
+    decisions = all_decisions
 
     hours = 720 if period in ("month", "quarter") else 168
     mneme = sources.read_mneme_recent(hours=hours)

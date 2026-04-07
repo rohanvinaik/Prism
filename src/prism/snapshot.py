@@ -5,12 +5,13 @@ from collections import Counter
 from . import engine, sources
 
 
-def run(period: str = "today") -> str:
+def run(period: str = "today", project: str = "") -> str:
     since = sources.period_to_since(period)
     label = {"today": "Today", "week": "This Week", "month": "This Month"}.get(period, period)
+    proj = project or None
 
-    sessions = list(sources.iter_sessions(since=since))
-    rtk_cmds = sources.read_rtk(since=since)
+    sessions = list(sources.iter_sessions(since=since, project_filter=proj))
+    rtk_cmds = sources.read_rtk(since=since, project_filter=proj)
 
     # Aggregate
     total_usage = sources.TokenUsage()
