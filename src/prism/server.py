@@ -10,7 +10,7 @@ results; leave empty for cross-project aggregate view.
 
 from mcp.server.fastmcp import FastMCP
 
-from . import behavior, economics, engine, forensics, health, recommend, snapshot, trajectory, trends
+from . import behavior, economics, engine, fix, forensics, health, pr_ready, recommend, snapshot, trajectory, trends
 
 mcp = FastMCP(
     "Prism",
@@ -128,17 +128,45 @@ def prism_health(project_path: str = "") -> str:
 
 
 @mcp.tool()
-def prism_recommend(project_path: str = "", period: str = "week") -> str:
+def prism_recommend(project_path: str = "", period: str = "week", min_confidence: int = 0) -> str:
     """Automation recommendations from Prism signals. No LLM inference.
 
-    Analyzes: setup health, tool usage patterns, hook gaps, error rates,
-    subagent costs. Recommends: hooks, setup fixes, workflow improvements.
+    Each recommendation has a confidence score (0-100) based on signal strength.
 
     Args:
         project_path: Absolute path to project root (for setup recommendations).
         period: Time window for behavioral analysis — today, week, month.
+        min_confidence: Only show recommendations above this threshold (0-100).
     """
-    return recommend.run(project_path, period)
+    return recommend.run(project_path, period, min_confidence)
+
+
+@mcp.tool()
+def prism_fix(project_path: str, dry_run: bool = True) -> str:
+    """Auto-fix issues from prism_recommend. Deterministic, no LLM inference.
+
+    Supports: venv creation, lockfile sync, .gitignore generation,
+    git init, secrets cleanup, linter config, hook patching.
+    Dry-run by default — set dry_run=False to apply.
+
+    Args:
+        project_path: Absolute path to project root.
+        dry_run: Preview fixes without applying (default True).
+    """
+    return fix.run(project_path, dry_run)
+
+
+@mcp.tool()
+def prism_pr_ready(project_path: str) -> str:
+    """PR readiness gate — composite go/no-go from on-disk state.
+
+    Checks: git clean, LintGate blockers, health score, lockfile freshness,
+    secrets safety, session error rate. Zero agent spawns, zero inference.
+
+    Args:
+        project_path: Absolute path to project root.
+    """
+    return pr_ready.run(project_path)
 
 
 def main():
