@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "prism"
+version = "0.1.0"
+description = "Holographic Claude Code usage analytics — multi-lens persistent monitor"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+prism-mcp = "prism.server:main"
