@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prism"
-version = "0.1.0"
+version = "0.2.0"
 description = "Holographic Claude Code usage analytics — multi-lens persistent monitor"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,3 +13,4 @@ dependencies = [
 
 [project.scripts]
 prism-mcp = "prism.server:main"
+prism-hook = "prism.hooks:main"

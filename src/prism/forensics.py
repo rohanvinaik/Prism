@@ -5,77 +5,68 @@ Deep dive into specific session(s) across all data sources.
 
 from collections import Counter
 
-from . import sources
+from . import engine, sources
 
 
-def _session_detail(s: sources.SessionData) -> list[str]:
-    """Format a single session's forensic report."""
-    lines = [f"# Session: {s.session_id[:12]}…", ""]
-    lines.append(f"- **Project**: {s.project}")
-    lines.append(f"- **Started**: {s.timestamp_start or 'unknown'}")
-    lines.append(f"- **Ended**: {s.timestamp_end or 'unknown'}")
+def _session_compact(s: sources.SessionData) -> str:
+    """One-line session summary for compact output."""
+    ts = s.timestamp_start[:16] if s.timestamp_start else "?"
+    top3 = Counter(tc.name for tc in s.tool_calls).most_common(3)
+    tools_str = ", ".join(f"{t}({c})" for t, c in top3)
+    return (
+        f"[{ts}] **{s.project}**: {s.usage.total:,} tokens, "
+        f"{s.prompt_count} prompts, {len(s.tool_calls)} calls ({tools_str})"
+    )
 
-    # Duration
+
+def _session_full(s: sources.SessionData) -> dict:
+    """Full session data for disk persistence."""
+    tool_counts = Counter(tc.name for tc in s.tool_calls)
+
     start = sources.parse_timestamp(s.timestamp_start)
     end = sources.parse_timestamp(s.timestamp_end)
-    if start and end:
-        mins = int((end - start).total_seconds() / 60)
-        lines.append(f"- **Duration**: {mins} min")
-    lines.append("")
+    duration_min = int((end - start).total_seconds() / 60) if start and end else None
 
-    # Token breakdown
-    lines.append("## Tokens")
-    lines.append(f"- Total: {s.usage.total:,}")
-    lines.append(f"- Input: {s.usage.input_tokens:,}")
-    lines.append(f"- Cache creation: {s.usage.cache_creation:,}")
-    lines.append(f"- Cache read: {s.usage.cache_read:,}")
-    lines.append(f"- Output: {s.usage.output_tokens:,}")
-    lines.append(f"- Cache hit rate: {s.usage.cache_hit_rate:.1%}")
-    if s.assistant_turns > 0:
-        lines.append(f"- Tokens/turn: {s.usage.total // s.assistant_turns:,}")
-    lines.append("")
+    reads = sum(1 for tc in s.tool_calls if tc.name in ("Read", "Grep", "Glob"))
+    edits = sum(1 for tc in s.tool_calls if tc.name in ("Edit", "Write"))
 
-    # Interaction shape
-    lines.append("## Interaction Shape")
-    lines.append(f"- Prompts: {s.prompt_count}")
-    lines.append(f"- Assistant turns: {s.assistant_turns}")
-    lines.append(f"- Tool calls: {len(s.tool_calls)}")
-    if s.prompt_count > 0:
-        lines.append(f"- Turns/prompt: {s.assistant_turns / s.prompt_count:.1f}")
-        lines.append(f"- Tools/prompt: {len(s.tool_calls) / s.prompt_count:.1f}")
-    lines.append("")
+    data: dict = {
+        "session_id": s.session_id,
+        "project": s.project,
+        "started": s.timestamp_start,
+        "ended": s.timestamp_end,
+        "duration_min": duration_min,
+        "tokens": {
+            "input": s.usage.input_tokens,
+            "cache_creation": s.usage.cache_creation,
+            "cache_read": s.usage.cache_read,
+            "output": s.usage.output_tokens,
+            "total": s.usage.total,
+            "cache_hit_rate": round(s.usage.cache_hit_rate, 3),
+            "per_turn": s.usage.total // max(s.assistant_turns, 1),
+        },
+        "interaction": {
+            "prompts": s.prompt_count,
+            "assistant_turns": s.assistant_turns,
+            "tool_calls": len(s.tool_calls),
+            "turns_per_prompt": round(s.assistant_turns / max(s.prompt_count, 1), 1),
+            "tools_per_prompt": round(len(s.tool_calls) / max(s.prompt_count, 1), 1),
+        },
+        "tool_distribution": dict(tool_counts.most_common()),
+        "tool_sequence": [tc.name for tc in s.tool_calls[:50]],
+        "signals": {
+            "reads": reads,
+            "edits": edits,
+            "read_edit_ratio": round(reads / max(edits, 1), 1),
+        },
+    }
 
-    # Tool breakdown
-    if s.tool_calls:
-        tool_counts = Counter(tc.name for tc in s.tool_calls)
-        lines.append("## Tool Calls")
-        lines.append("| Tool | Count | % |")
-        lines.append("|------|-------|---|")
-        for tool, count in tool_counts.most_common():
-            pct = count / len(s.tool_calls) * 100
-            lines.append(f"| {tool} | {count} | {pct:.0f}% |")
-        lines.append("")
-
-        # Tool sequence
-        seq = [tc.name for tc in s.tool_calls[:40]]
-        lines.append("## Tool Sequence (first 40)")
-        lines.append(" -> ".join(seq))
-        lines.append("")
-
-        # Behavioral signals for this session
-        reads = sum(1 for tc in s.tool_calls if tc.name in ("Read", "Grep", "Glob"))
-        edits = sum(1 for tc in s.tool_calls if tc.name in ("Edit", "Write"))
-        if edits > 0:
-            lines.append(f"- Read/Edit ratio: {reads / edits:.1f}:1")
-
-    # Subagents
     if s.subagent_count > 0:
-        lines.append("## Subagents")
-        lines.append(f"- Count: {s.subagent_count}")
-        lines.append(f"- Subagent tokens: {s.subagent_usage.total:,}")
-        pct = s.subagent_usage.total / max(s.usage.total, 1) * 100
-        lines.append(f"- % of session: {pct:.1f}%")
-        lines.append("")
+        data["subagents"] = {
+            "count": s.subagent_count,
+            "tokens": s.subagent_usage.total,
+            "pct_of_session": round(s.subagent_usage.total / max(s.usage.total, 1) * 100, 1),
+        }
 
     # RTK commands overlapping this session
     start_dt = sources.parse_timestamp(s.timestamp_start)
@@ -84,13 +75,12 @@ def _session_detail(s: sources.SessionData) -> list[str]:
         if rtk_cmds and s.timestamp_end:
             in_range = [c for c in rtk_cmds if c.get("timestamp", "") <= s.timestamp_end]
             if in_range:
-                total_saved = sum(c.get("saved_tokens", 0) for c in in_range)
-                lines.append("## RTK Activity (overlapping)")
-                lines.append(f"- Commands: {len(in_range)}")
-                lines.append(f"- Tokens saved: {total_saved:,}")
-                lines.append("")
+                data["rtk"] = {
+                    "commands": len(in_range),
+                    "saved": sum(c.get("saved_tokens", 0) for c in in_range),
+                }
 
-    return lines
+    return data
 
 
 def run(session_id: str = "", project: str = "", last_n: int = 1) -> str:
@@ -109,10 +99,20 @@ def run(session_id: str = "", project: str = "", last_n: int = 1) -> str:
     if not targets:
         return "No sessions found."
 
-    parts = []
+    # -- Compact summary --
+    lines = [f"# Session Forensics ({len(targets)} session{'s' if len(targets) > 1 else ''})", ""]
     for s in targets:
-        parts.extend(_session_detail(s))
-        parts.append("---")
-        parts.append("")
+        lines.append(f"- {_session_compact(s)}")
 
-    return "\n".join(parts)
+    summary = "\n".join(lines)
+
+    # -- Full data to disk --
+    full_data = {
+        "sessions": [_session_full(s) for s in targets],
+    }
+
+    aid = engine.save_snapshot("forensics", summary, full_data)
+    lines.append("")
+    lines.append(f"_Details: prism_details(\"{aid}\", section=\"sessions\", path=\"0.tool_distribution\")_")
+
+    return "\n".join(lines)
