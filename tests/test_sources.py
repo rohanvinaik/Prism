@@ -554,7 +554,8 @@ class TestFindDbs:
     def test_find_mneme_db_returns_none_when_absent(self):
         from prism.sources import _find_mneme_db
 
-        with patch("prism.sources.HOME", Path("/nonexistent")), patch.dict(
-            os.environ, {}, clear=True
+        with (
+            patch("prism.sources.HOME", Path("/nonexistent")),
+            patch.dict(os.environ, {}, clear=True),
         ):
             assert _find_mneme_db() is None

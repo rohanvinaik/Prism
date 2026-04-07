@@ -86,9 +86,7 @@ def _decisions_data(since: datetime | None) -> dict:
     }
 
 
-def _filter_decisions_by_project(
-    all_decisions: dict, project: str, since: datetime | None
-) -> dict:
+def _filter_decisions_by_project(all_decisions: dict, project: str, since: datetime | None) -> dict:
     """Narrow decisions to a specific project, or return as-is."""
     if not project or not all_decisions:
         return all_decisions
@@ -147,8 +145,7 @@ def analyze(period: str = "month", project: str = "") -> str:
             lines.append(f"- Purity: {quality['purity_first']:.2f} -> {quality['purity_last']:.2f}")
     if decisions:
         top3 = ", ".join(
-            f"{k}={v}"
-            for k, v in sorted(decisions["by_category"].items(), key=lambda x: -x[1])[:3]
+            f"{k}={v}" for k, v in sorted(decisions["by_category"].items(), key=lambda x: -x[1])[:3]
         )
         lines.append(f"- Decisions: {decisions['total']} ({top3})")
     if mneme and mneme.get("event_count", 0) > 0:

@@ -4,7 +4,6 @@ health.py already has 100% mutation kill rate (tested transitively via
 test_recommend.py), but LintGate's test channel wants a direct test file.
 """
 
-
 from prism.health import assess, check
 
 
