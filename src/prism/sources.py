@@ -222,29 +222,48 @@ def parse_session(path: Path, proj: str) -> Optional[SessionData]:
     return session
 
 
-def iter_sessions(
-    since: Optional[datetime] = None,
-    project_filter: Optional[str] = None,
-) -> Iterator[SessionData]:
-    """Iterate over all Claude Code sessions, optionally filtered."""
+def _file_modified_since(path: Path, cutoff: datetime) -> bool:
+    """Check if file was modified after cutoff (avoids parsing stale files)."""
+    try:
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        return mtime >= cutoff
+    except OSError:
+        return False
+
+
+def _session_in_range(session: SessionData, since: datetime) -> bool:
+    """Check if session started after cutoff."""
+    ts = parse_timestamp(session.timestamp_start)
+    return not ts or ts >= since
+
+
+def _matching_projects(project_filter: Optional[str]) -> Iterator[tuple[Path, str]]:
+    """Yield (proj_dir, proj_name) for matching project directories."""
     if not PROJECTS_DIR.is_dir():
         return
-
     for proj_dir in sorted(PROJECTS_DIR.iterdir()):
         if not proj_dir.is_dir():
             continue
         proj = project_name(proj_dir.name)
         if project_filter and project_filter.lower() not in proj.lower():
             continue
+        yield proj_dir, proj
 
+
+def iter_sessions(
+    since: Optional[datetime] = None,
+    project_filter: Optional[str] = None,
+) -> Iterator[SessionData]:
+    """Iterate over all Claude Code sessions, optionally filtered."""
+    for proj_dir, proj in _matching_projects(project_filter):
         for jsonl_file in sorted(proj_dir.glob("*.jsonl")):
+            if since and not _file_modified_since(jsonl_file, since):
+                continue
             session = parse_session(jsonl_file, proj)
             if not session:
                 continue
-            if since:
-                ts = parse_timestamp(session.timestamp_start)
-                if ts and ts < since:
-                    continue
+            if since and not _session_in_range(session, since):
+                continue
             yield session
 
 

@@ -3,7 +3,7 @@ paths:
   - "**/*.py"
 ---
 
-<!-- LG_GEN:73 LG_TS:1775528414 -->
-Focus: Edit snapshot.py
-Files: snapshot.py, forensics.py, engine.py
-Mode: normal
+<!-- LG_GEN:94 LG_TS:1775528901 -->
+Focus: Edit sources.py
+Files: sources.py, server.py, trends.py
+Blocking: 2 | Mode: normal

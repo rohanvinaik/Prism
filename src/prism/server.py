@@ -10,7 +10,7 @@ results; leave empty for cross-project aggregate view.
 
 from mcp.server.fastmcp import FastMCP
 
-from . import behavior, economics, engine, forensics, health, snapshot, trajectory
+from . import behavior, economics, engine, forensics, health, snapshot, trajectory, trends
 
 mcp = FastMCP(
     "Prism",
@@ -96,6 +96,21 @@ def prism_details(snapshot_id: str, section: str = "", path: str = "", max_items
         max_items: Max list items to return (default 20).
     """
     return engine.query_snapshot(snapshot_id, section, path, max_items)
+
+
+@mcp.tool()
+@mcp.tool()
+def prism_trends(days: int = 7, project: str = "") -> str:
+    """Cross-session trends from hook daily summaries.
+
+    Detects efficiency drift, error rate changes, tool distribution shifts.
+    Reads from pre-aggregated hook data — no JSONL scanning, near-instant.
+
+    Args:
+        days: Number of days to analyze (default 7).
+        project: Filter to project name (substring match). Empty for all.
+    """
+    return trends.run(days, project)
 
 
 @mcp.tool()
