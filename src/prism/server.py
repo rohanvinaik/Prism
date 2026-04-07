@@ -10,7 +10,7 @@ results; leave empty for cross-project aggregate view.
 
 from mcp.server.fastmcp import FastMCP
 
-from . import behavior, economics, engine, forensics, health, snapshot, trajectory, trends
+from . import behavior, economics, engine, forensics, health, recommend, snapshot, trajectory, trends
 
 mcp = FastMCP(
     "Prism",
@@ -125,6 +125,20 @@ def prism_health(project_path: str = "") -> str:
     if not project_path:
         return "Error: project_path is required (MCP server cwd is not project-specific)."
     return health.run(project_path)
+
+
+@mcp.tool()
+def prism_recommend(project_path: str = "", period: str = "week") -> str:
+    """Automation recommendations from Prism signals. No LLM inference.
+
+    Analyzes: setup health, tool usage patterns, hook gaps, error rates,
+    subagent costs. Recommends: hooks, setup fixes, workflow improvements.
+
+    Args:
+        project_path: Absolute path to project root (for setup recommendations).
+        period: Time window for behavioral analysis — today, week, month.
+    """
+    return recommend.run(project_path, period)
 
 
 def main():

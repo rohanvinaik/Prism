@@ -3,11 +3,11 @@ paths:
   - "**/*.py"
 ---
 
-<!-- LG_GEN:94 LG_TS:1775528901 -->
+<!-- LG_GEN:126 LG_TS:1775529323 -->
 # Session State
 
-Mode: normal
-Focus: [sources.py, server.py, trends.py, snapshot.py, forensics.py]
-Coherence: coupled | Blocking: 2 | Warnings: 118
+Mode: habit (score: 0.75)
+Focus: [_controlplane_impl_run.py, server.py, recommend.py, sources.py, trends.py]
+Coherence: isolated | Blocking: 39 | Warnings: 133
 
-Context: 9% used | Tools: 61 | Compactions: 0
+Context: 11% used | Tools: 87 | Compactions: 0
