@@ -147,7 +147,7 @@ def _fix_prism_hooks(project_path: str) -> tuple[bool, str]:
         return False, f"Failed to read settings: {e}"
 
     hooks = settings.setdefault("hooks", {})
-    prism_hook_cmd = "/Users/rohanvinaik/tools/prism/.venv/bin/prism-hook"
+    prism_hook_cmd = "/Users/rohanvinaik/tools/Prism/.venv/bin/prism-hook"
     prism_entry = {"hooks": [{"type": "command", "command": prism_hook_cmd}]}
 
     changed = False
