@@ -22,11 +22,7 @@ SESSION_ERROR_RATE_THRESHOLD = 0.20
 
 
 def _session_id(data: dict) -> str:
-    return (
-        data.get("session_id")
-        or os.environ.get("CLAUDE_SESSION_ID")
-        or "unknown"
-    )
+    return data.get("session_id") or os.environ.get("CLAUDE_SESSION_ID") or "unknown"
 
 
 def _project_from_cwd(data: dict) -> str:
@@ -50,6 +46,7 @@ def _check_consecutive_errors(events: list[dict]) -> int:
 # Event handlers
 # ---------------------------------------------------------------------------
 
+
 def handle_post_tool_use(data: dict) -> dict:
     """Record tool execution. Emit warning on consecutive errors."""
     sid = _session_id(data)
@@ -64,11 +61,7 @@ def handle_post_tool_use(data: dict) -> dict:
     if isinstance(tool_output, str):
         event["output_bytes"] = len(tool_output.encode("utf-8", errors="replace"))
         lower = tool_output[:200].lower()
-        event["error"] = (
-            "error" in lower
-            or "traceback" in lower
-            or "exception" in lower
-        )
+        event["error"] = "error" in lower or "traceback" in lower or "exception" in lower
     elif isinstance(tool_output, dict):
         event["error"] = bool(tool_output.get("error"))
     else:
@@ -94,10 +87,13 @@ def handle_post_tool_use(data: dict) -> dict:
 def handle_session_start(data: dict) -> dict:
     """Initialize session tracking. Silent."""
     sid = _session_id(data)
-    engine.append_event(sid, {
-        "event": "session_start",
-        "project": _project_from_cwd(data),
-    })
+    engine.append_event(
+        sid,
+        {
+            "event": "session_start",
+            "project": _project_from_cwd(data),
+        },
+    )
     return {}
 
 
@@ -159,11 +155,13 @@ def handle_stop(data: dict) -> dict:
     engine.append_daily_summary(summary)
 
     # Write bridge file for LintGate consumption
-    engine.write_bridge({
-        "session_id": sid,
-        "project": project,
-        **efficiency,
-    })
+    engine.write_bridge(
+        {
+            "session_id": sid,
+            "project": project,
+            **efficiency,
+        }
+    )
 
     # Anomaly: high error rate
     if efficiency["error_rate"] > SESSION_ERROR_RATE_THRESHOLD:
@@ -189,10 +187,13 @@ def handle_pre_compact(data: dict) -> dict:
     events = engine.read_events(sid)
     tool_count = sum(1 for e in events if e.get("event") == "tool_use")
 
-    engine.append_event(sid, {
-        "event": "pre_compact",
-        "tools_so_far": tool_count,
-    })
+    engine.append_event(
+        sid,
+        {
+            "event": "pre_compact",
+            "tools_so_far": tool_count,
+        },
+    )
     return {}
 
 

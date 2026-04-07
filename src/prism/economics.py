@@ -4,14 +4,13 @@ RTK filtering savings + API token consumption + cache efficiency + subagent cost
 """
 
 from collections import defaultdict
-from typing import Optional
 
 from . import engine, sources
 
 
-def run(period: str = "week", project: str = "") -> str:
+def analyze(period: str = "week", project: str = "") -> str:
     since = sources.period_to_since(period)
-    proj: Optional[str] = project or None
+    proj: str | None = project or None
 
     sessions = list(sources.iter_sessions(since=since, project_filter=proj))
     rtk_cmds = sources.read_rtk(since=since, project_filter=proj)
@@ -36,16 +35,25 @@ def run(period: str = "week", project: str = "") -> str:
     # -- Compact summary --
     lines = [f"# Token Economics — {period}", ""]
     lines.append(f"- Sessions: {len(sessions)} | API tokens: {total_usage.total:,}")
-    lines.append(f"- Cache hit: {total_usage.cache_hit_rate:.1%} | Output: {total_usage.output_tokens:,}")
+    lines.append(
+        f"- Cache hit: {total_usage.cache_hit_rate:.1%} | Output: {total_usage.output_tokens:,}"
+    )
     if total_subagents:
         pct = total_subagent.total / max(total_usage.total, 1) * 100
-        lines.append(f"- Subagents: {total_subagents} ({total_subagent.total:,} tokens, {pct:.0f}%)")
+        lines.append(
+            f"- Subagents: {total_subagents} ({total_subagent.total:,} tokens, {pct:.0f}%)"
+        )
     if rtk_cmds:
-        lines.append(f"- RTK: {len(rtk_cmds)} cmds, {rtk_saved:,} saved ({rtk_saved / max(rtk_input, 1):.0%})")
-    if total_usage.total > 0 and rtk_saved > 0:
-        total_saved = total_usage.cache_read + rtk_saved
-        effective = total_usage.total + rtk_saved
-        lines.append(f"- Combined efficiency: {total_saved:,} saved ({total_saved / effective:.0%})")
+        lines.append(
+            f"- RTK: {len(rtk_cmds)} cmds, {rtk_saved:,} saved"
+            f" ({rtk_saved / max(rtk_input, 1):.0%})"
+        )
+        if total_usage.total > 0 and rtk_saved > 0:
+            total_saved = total_usage.cache_read + rtk_saved
+            effective = total_usage.total + rtk_saved
+            lines.append(
+                f"- Combined efficiency: {total_saved:,} saved ({total_saved / effective:.0%})"
+            )
 
     # Top 3 projects inline
     sorted_projs = sorted(by_project.items(), key=lambda x: x[1].total, reverse=True)[:3]
@@ -105,6 +113,6 @@ def run(period: str = "week", project: str = "") -> str:
 
     aid = engine.save_snapshot("economics", summary, full_data)
     lines.append("")
-    lines.append(f"_Details: prism_details(\"{aid}\", section=\"by_project\" or \"costliest_sessions\")_")
+    lines.append(f'_Details: prism_details("{aid}", section="by_project" or "costliest_sessions")_')
 
     return "\n".join(lines)

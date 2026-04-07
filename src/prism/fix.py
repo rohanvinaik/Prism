@@ -11,9 +11,10 @@ Supported fix categories:
 """
 
 import json
+import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import engine, recommend
 
@@ -26,9 +27,11 @@ FIX_REGISTRY: dict[str, Callable[[str], tuple[bool, str]]] = {}
 
 def _register(title: str):
     """Decorator to register a fix function for a recommendation title."""
+
     def decorator(fn):
         FIX_REGISTRY[title] = fn
         return fn
+
     return decorator
 
 
@@ -36,8 +39,11 @@ def _run_cmd(args: list[str], cwd: str, timeout: int = 30) -> tuple[bool, str]:
     """Run a command as arg list, return (success, output)."""
     try:
         result = subprocess.run(
-            args, cwd=cwd,
-            capture_output=True, text=True, timeout=timeout,
+            args,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         output = (result.stdout + result.stderr).strip()
         return result.returncode == 0, output or "(no output)"
@@ -50,6 +56,7 @@ def _run_cmd(args: list[str], cwd: str, timeout: int = 30) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Fix implementations
 # ---------------------------------------------------------------------------
+
 
 @_register("Create virtual environment")
 def _fix_venv(project_path: str) -> tuple[bool, str]:
@@ -95,7 +102,9 @@ def _fix_gitignore(project_path: str) -> tuple[bool, str]:
 
     # Detect project type for template
     if (root / "pyproject.toml").is_file() or (root / "setup.py").is_file():
-        template = "__pycache__/\n*.pyc\n*.egg-info/\n.venv/\nvenv/\ndist/\nbuild/\n.env\n.lintgate/\n"
+        template = (
+            "__pycache__/\n*.pyc\n*.egg-info/\n.venv/\nvenv/\ndist/\nbuild/\n.env\n.lintgate/\n"
+        )
     elif (root / "package.json").is_file():
         template = "node_modules/\ndist/\n.env\n*.log\n"
     elif (root / "Cargo.toml").is_file():
@@ -132,7 +141,9 @@ def _fix_linter(project_path: str) -> tuple[bool, str]:
     if ruff_toml.exists():
         return True, "ruff.toml already exists"
 
-    ruff_toml.write_text('[lint]\nselect = ["E", "F", "W", "I"]\n\n[format]\nquote-style = "double"\n')
+    ruff_toml.write_text(
+        '[lint]\nselect = ["E", "F", "W", "I"]\n\n[format]\nquote-style = "double"\n'
+    )
     return True, "Created ruff.toml with standard rules"
 
 
@@ -147,7 +158,7 @@ def _fix_prism_hooks(project_path: str) -> tuple[bool, str]:
         return False, f"Failed to read settings: {e}"
 
     hooks = settings.setdefault("hooks", {})
-    prism_hook_cmd = "/Users/rohanvinaik/tools/Prism/.venv/bin/prism-hook"
+    prism_hook_cmd = shutil.which("prism-hook") or "prism-hook"
     prism_entry = {"hooks": [{"type": "command", "command": prism_hook_cmd}]}
 
     changed = False
@@ -173,7 +184,8 @@ def _fix_prism_hooks(project_path: str) -> tuple[bool, str]:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(project_path: str, dry_run: bool = True, titles: Optional[list[str]] = None) -> str:
+
+def apply_fixes(project_path: str, dry_run: bool = True, titles: list[str] | None = None) -> str:
     """Run auto-fixes from recommendations.
 
     Args:
@@ -182,7 +194,7 @@ def run(project_path: str, dry_run: bool = True, titles: Optional[list[str]] = N
         titles: Specific recommendation titles to fix. None = fix all fixable.
     """
     # Generate fresh recommendations (writes snapshot to disk)
-    recommend.run(project_path, "week")
+    recommend.analyze(project_path, "week")
 
     # Load the snapshot to get structured recommendations
     snapshots = engine.list_snapshots(limit=5)
@@ -200,12 +212,13 @@ def run(project_path: str, dry_run: bool = True, titles: Optional[list[str]] = N
         return "No recommendations to fix."
 
     # Filter to fixable items
-    fixable = []
-    for r in recs:
-        title = r.get("title", "")
-        if title in FIX_REGISTRY:
-            if titles is None or title in titles:
-                fixable.append(r)
+    title_set = set(titles) if titles else None
+    fixable = [
+        r
+        for r in recs
+        if r.get("title", "") in FIX_REGISTRY
+        and (title_set is None or r.get("title", "") in title_set)
+    ]
 
     if not fixable:
         unfixable = [r["title"] for r in recs if r["title"] not in FIX_REGISTRY]

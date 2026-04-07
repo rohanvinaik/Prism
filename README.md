@@ -1,123 +1,111 @@
 # Prism
 
-**Holographic usage analytics for LLM coding agents.**
+**Usage analytics for Claude Code.** Token economics, behavioral signals, session forensics — all from data Claude Code already writes to disk. Zero LLM inference.
 
-11 MCP tools. 4 hooks. 8 data sources. Zero LLM inference.
+[![CI](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml/badge.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=coverage)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
+[![Mutation Kill Rate](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-kill-rate.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
+[![Mean σ](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/sigma.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
+[![Tests](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/test-count.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 
----
+## Setup
 
-## The problem
+```bash
+# 1. Install
+uv tool install prism-mcp        # or: pip install prism-mcp
 
-LLM coding agents burn tokens invisibly. Context windows compress without warning. Subagent spawns multiply costs. Cache efficiency swings between 4% and 96% depending on workflow. Error streaks cascade. And the official tools for monitoring all of this? They spawn *more* agents — consuming the very resource you're trying to understand.
+# 2. Add MCP server to Claude Code
+#    In ~/.mcp.json (or your MCP config):
+{
+  "mcpServers": {
+    "Prism": {
+      "command": "prism-mcp",
+      "args": []
+    }
+  }
+}
 
-Meanwhile, every Claude Code session already writes detailed JSONL logs. RTK tracks command-level savings in SQLite. LintGate records quality metrics and behavioral signals. Continuity logs architectural decisions. Mneme tracks cognitive state. The data exists. Nobody reads it.
+# 3. Wire hooks (add to ~/.claude/settings.json):
+{
+  "hooks": {
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "prism-hook" }] }],
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "prism-hook" }] }],
+    "PreCompact": [{ "hooks": [{ "type": "command", "command": "prism-hook" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "prism-hook" }] }]
+  }
+}
+```
 
-## What Prism does
+That's it. Start a Claude Code session and Prism begins collecting data. After a few sessions, every tool returns meaningful analytics.
 
-Prism reads all of it — cheaply, silently, from disk — and reconstructs a holographic view of how you work with LLM agents.
+## What you get
 
-**Analytics** — Token economics, tool choreography, workflow mode detection, cache efficiency, subagent cost attribution. Cross-session trend detection from pre-aggregated hook data. All project-scoped.
+**First session:** `prism_health("/path/to/project")` scores your project setup (venv, lockfile, git, CI, secrets, toolchain) from 0-100. `prism_recommend` suggests fixes. `prism_fix` applies them deterministically.
 
-**Assessment** — Setup maturity scoring (0-100): venv, lockfile, git, CI, secrets, toolchain. PR readiness gate: composite go/no-go from git state, LintGate blockers, health score, session error rate.
+**After a few sessions:** `prism_snapshot("week")` shows token burn, cache efficiency, tool distribution, read/edit ratios. `prism_economics` breaks down API consumption and subagent costs. `prism_behavior` detects workflow modes (Explore, Surgical, Shell-heavy, Delegating, Balanced).
 
-**Remediation** — Confidence-scored recommendations (0-100) from behavioral signals and health checks. Deterministic auto-fixer: venv creation, lockfile sync, .gitignore generation, hook patching. Dry-run by default.
+**Over time:** `prism_trends` detects efficiency drift, error rate changes, and tool distribution shifts from pre-aggregated daily summaries. `prism_trajectory` shows quality and decision trends. `prism_forensics` reconstructs any session in detail.
 
-**Forensics** — Reconstruct any session: token breakdown, tool sequence, subagent costs, read/edit ratios. Enriched with real-time hook data (error detection, output sizes, compaction boundaries) that post-hoc JSONL parsing can't capture.
+**Before merging:** `prism_pr_ready("/path/to/project")` is a composite go/no-go gate — git clean, health score, lockfile freshness, session error rate.
 
-## The economics
+## How it works
 
-Every tool writes full results to disk and returns ~300 tokens + a snapshot ID. Claude drills down on demand via `prism_details(id, section)` — 50-70% token savings per analysis cycle vs returning everything upfront.
-
-Hooks are silent writers (zero token cost). The Stop hook pre-computes session summaries. `prism_trends` reads pre-aggregated daily JSONL in <0.1 seconds. The recommend-fix-gate loop runs on JSON parsing and `stat()` calls — no inference, no agent spawns.
-
-Performance: mtime pre-filter on JSONL scanning — 4,945 files / 2.8GB skipped by file modification time. Unscoped "today" query: 1.1 seconds (down from 15).
-
-## Architecture
+Every tool writes full results to disk and returns ~300 tokens + a snapshot ID. Drill into the full data on demand with `prism_details(id, section)`. Hooks are silent writers (zero token cost to your session). No agents spawned, no inference calls.
 
 ```
 ~/.claude/prism/
-├── snapshots/{id}.json        # Analysis results (drill-down via prism_details)
-├── sessions/{session_id}.jsonl # Real-time tool call events from hooks
-├── daily/{YYYYMMDD}.jsonl     # Session summaries (one line per session)
-├── health/{project_hash}.json # Setup maturity (LintGate reads this)
-└── bridge.json                # Session efficiency (LintGate reads this)
+├── snapshots/{id}.json           # Analysis results (drill-down via prism_details)
+├── sessions/{session_id}.jsonl   # Real-time tool events from hooks
+├── daily/{YYYYMMDD}.jsonl        # Session summaries (one line per session)
+└── health/{project_hash}.json    # Project setup maturity state
 ```
 
-**Three layers:**
+### Core data sources
 
-1. **On-disk engine** — Snapshot persistence, session event streams, daily summaries, JSON path drill-down with 2048-char response cap.
+These work for everyone with Claude Code installed:
 
-2. **Real-time hooks** — PostToolUse (tool call logging), SessionStart (session init), PreCompact (compaction boundary), Stop (session finalization + efficiency scoring). Silent by default. Anomaly detection emits warnings only on 3+ consecutive errors or >20% session error rate.
+| Source | What Prism reads |
+|--------|-----------------|
+| Claude Code sessions (`~/.claude/projects/`) | Token usage, tool calls, subagents, prompts |
+| stats-cache (`~/.claude/stats-cache.json`) | Daily activity rollups |
+| Prism hook events (`~/.claude/prism/`) | Real-time tool errors, output sizes, compaction boundaries |
 
-3. **LintGate bridge** — Bidirectional, disk-mediated. Prism writes `bridge.json` and `health/` state. LintGate's controlplane reads these via `_inject_prism_data()` for efficiency-aware nudges. No MCP-to-MCP calls.
+### Optional integrations
 
-## Data sources
+Prism auto-detects these if present. If they're not installed, those sections simply don't appear in output — nothing breaks.
 
-| Source | Format | What Prism reads |
-|--------|--------|-----------------|
-| Claude Code sessions | JSONL | Token usage, tool calls, subagents, prompts |
-| RTK | SQLite | Command filtering savings, per-project |
-| stats-cache | JSON | Daily activity rollups |
-| usage-data facets | JSON | Session outcomes, satisfaction |
-| LintGate metrics | JSONL | Code quality, feature usage, purity ratios |
-| LintGate sessions | JSON | Behavioral compass, coherence trajectory |
-| Continuity | SQLite | Architectural decisions, confidence, outcomes |
-| Mneme | SQLite | Cognitive events, weather, concept drift |
-
-All reads are read-only. Prism never modifies external data.
-
-## Quick start
-
-```bash
-# Install
-cd ~/tools/prism
-python3 -m venv .venv
-.venv/bin/pip install -e .
-
-# Register in canonical MCP config
-# Add to ~/.config/mcp/servers.json:
-#   "Prism": {
-#     "command": "/Users/you/tools/prism/.venv/bin/prism-mcp",
-#     "args": []
-#   }
-# Then: python3 ~/.config/mcp/sync.py
-
-# Wire hooks (add to ~/.claude/settings.json "hooks" section):
-#   PostToolUse, SessionStart, PreCompact, Stop
-#   command: /Users/you/tools/prism/.venv/bin/prism-hook
-```
-
-**First session workflow:**
-
-1. `prism_snapshot("today", "my-project")` — where am I?
-2. `prism_health("/path/to/project")` — setup gaps?
-3. `prism_recommend("/path/to/project")` — what should I fix?
-4. `prism_fix("/path/to/project", dry_run=False)` — fix it
-5. `prism_pr_ready("/path/to/project")` — ready to ship?
+| Integration | What it adds |
+|-------------|-------------|
+| [RTK](https://github.com/reachingforthejack/rtk) | Token savings from command filtering |
+| LintGate | Code quality signals, behavioral compass, coherence trajectory |
+| Continuity | Architectural decisions, confidence scoring, session outcomes |
+| Mneme | Cognitive events, concept anchors, dimension tracking |
 
 ## Tools
 
 | Tool | Purpose |
 |------|---------|
 | `prism_snapshot` | Multi-lens composite view |
-| `prism_economics` | Token burn, cache, RTK savings, subagent costs |
+| `prism_economics` | Token burn, cache efficiency, subagent costs |
 | `prism_behavior` | Tool choreography, workflow mode detection |
 | `prism_trajectory` | Quality / decision / cognitive trends |
 | `prism_forensics` | Session deep-dive with hook enrichment |
 | `prism_trends` | Cross-session intelligence (<0.1s) |
 | `prism_health` | Project setup maturity (0-100) |
-| `prism_recommend` | Confidence-scored recommendations |
-| `prism_fix` | Deterministic auto-remediation |
-| `prism_pr_ready` | PR readiness gate |
-| `prism_details` | Drill into any snapshot |
+| `prism_recommend` | Confidence-scored automation recommendations |
+| `prism_fix` | Deterministic auto-remediation (dry-run by default) |
+| `prism_pr_ready` | PR readiness gate (go/no-go) |
+| `prism_details` | Drill into any snapshot by section |
 
-## What this is not
+All tools accept an optional `project` parameter (substring match) to scope results.
 
-**Not a linter.** LintGate handles code quality. Prism handles usage analytics and setup health. They collaborate via disk, not compete.
+## Design principles
 
-**Not an agent spawner.** Every Anthropic plugin we evaluated (pr-review-toolkit, code-review, claude-code-setup) solves problems by spawning 4-6 parallel agents. Prism solves the same problems by reading JSON files that already exist.
-
-**Not a token counter.** RTK counts tokens saved by command filtering. Prism operates at the session/project/workflow level — cache efficiency, subagent cost attribution, behavioral patterns, cross-session trends. Complementary, not competing.
+- **Read-only.** Prism never modifies external data. All writes go to `~/.claude/prism/`.
+- **No inference.** Everything runs on JSON parsing and file stats. The recommend-fix-gate loop is pure computation.
+- **Compact-first.** Full results on disk, ~300-token summaries to the LLM. Drill-down on demand.
+- **Graceful degradation.** Missing data sources return empty results. No crashes, no error messages, just fewer sections in the output.
 
 ## License
 

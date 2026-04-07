@@ -5,24 +5,29 @@ and LintGate habit signals.
 """
 
 from collections import Counter
-from typing import Optional
 
 from . import engine, sources
 
 
-def _aggregate_tools(
-    sessions: list[sources.SessionData],
-) -> tuple[Counter[str], Counter[tuple[str, str]]]:
+def _count_tools(sessions: list[sources.SessionData]) -> Counter[str]:
+    """Count tool usage across all sessions."""
     counts: Counter[str] = Counter()
+    for s in sessions:
+        for tc in s.tool_calls:
+            counts[tc.name] += 1
+    return counts
+
+
+def _count_transitions(sessions: list[sources.SessionData]) -> Counter[tuple[str, str]]:
+    """Count tool-to-tool transition pairs across all sessions."""
     transitions: Counter[tuple[str, str]] = Counter()
     for s in sessions:
         prev = None
         for tc in s.tool_calls:
-            counts[tc.name] += 1
             if prev:
                 transitions[(prev, tc.name)] += 1
             prev = tc.name
-    return counts, transitions
+    return transitions
 
 
 def _infer_workflow_mode(tool_counts: Counter[str], total_calls: int) -> str:
@@ -46,12 +51,30 @@ def _infer_workflow_mode(tool_counts: Counter[str], total_calls: int) -> str:
     return "Balanced"
 
 
-def run(period: str = "week", project: str = "") -> str:
+def _skew_warnings(edits, lines, reads, tool_counts, total_calls):
+    if total_calls > 50:
+        bash_pct = tool_counts.get("Bash", 0) / total_calls
+        if bash_pct > 0.4 and reads > 0:
+            bash_to_read = tool_counts.get("Bash", 0) / reads
+            lines.append(
+                f"- ⚠ Bash is {bash_to_read:.1f}x Read+Grep+Glob"
+                " — consider dedicated tools for file ops"
+            )
+        if reads > 0 and edits > 0 and reads / edits < 1.5:
+            lines.append(
+                f"- ⚠ Read/Edit ratio is low ({reads / edits:.1f}:1)"
+                " — more reading before editing may help"
+            )
+    return lines
+
+
+def analyze(period: str = "week", project: str = "") -> str:
     since = sources.period_to_since(period)
-    proj: Optional[str] = project or None
+    proj: str | None = project or None
     sessions = list(sources.iter_sessions(since=since, project_filter=proj))
 
-    tool_counts, tool_transitions = _aggregate_tools(sessions)
+    tool_counts = _count_tools(sessions)
+    tool_transitions = _count_transitions(sessions)
     total_calls = sum(tool_counts.values())
     total_prompts = sum(s.prompt_count for s in sessions)
     total_turns = sum(s.assistant_turns for s in sessions)
@@ -63,7 +86,9 @@ def run(period: str = "week", project: str = "") -> str:
     # -- Compact summary --
     lines = [f"# Behavioral Profile — {period}", ""]
     lines.append(f"- Sessions: {len(sessions)} | Prompts: {total_prompts} | Turns: {total_turns}")
-    lines.append(f"- Tool calls: {total_calls} | Tools/turn: {total_calls / max(total_turns, 1):.1f}")
+    lines.append(
+        f"- Tool calls: {total_calls} | Tools/turn: {total_calls / max(total_turns, 1):.1f}"
+    )
     if edits > 0:
         lines.append(f"- Read/Edit: {reads / edits:.1f}:1 | Mode: **{mode}**")
     else:
@@ -77,15 +102,19 @@ def run(period: str = "week", project: str = "") -> str:
     if top3_seq:
         lines.append(f"- Top sequences: {top3_seq}")
 
-    # LintGate signals (single line)
+    # Interpretive nudge when ratios are notably skewed
+    lines = _skew_warnings(edits, lines, reads, tool_counts, total_calls)
+
+    # LintGate signals (single line, only if LintGate is present)
     lg_sessions = sources.read_lintgate_sessions()
-    for session_data in lg_sessions.values():
-        compass = session_data.get("behavior_compass", {})
-        signals = compass.get("signals_state", {}) if compass else {}
-        if signals:
-            hs = signals.get("habit_score", "?")
-            lines.append(f"- LintGate habit score: {hs}")
-            break
+    if lg_sessions:
+        for session_data in lg_sessions.values():
+            compass = session_data.get("behavior_compass", {})
+            signals = compass.get("signals_state", {}) if compass else {}
+            if signals:
+                hs = signals.get("habit_score", "?")
+                lines.append(f"- LintGate habit score: {hs}")
+                break
 
     summary = "\n".join(lines)
 
@@ -99,9 +128,7 @@ def run(period: str = "week", project: str = "") -> str:
         "tool_calls": total_calls,
         "workflow_mode": mode,
         "tool_distribution": dict(tool_counts.most_common()),
-        "tool_transitions": {
-            f"{a}>{b}": c for (a, b), c in tool_transitions.most_common(20)
-        },
+        "tool_transitions": {f"{a}>{b}": c for (a, b), c in tool_transitions.most_common(20)},
         "signals": {
             "reads": reads,
             "edits": edits,
@@ -111,17 +138,20 @@ def run(period: str = "week", project: str = "") -> str:
         },
         "lintgate_signals": {},
     }
-    for session_data in lg_sessions.values():
-        compass = session_data.get("behavior_compass", {})
-        if compass:
-            full_data["lintgate_signals"] = {
-                "signals_state": compass.get("signals_state", {}),
-                "coherence_trajectory": session_data.get("coherence_trajectory", []),
-            }
-            break
+    if lg_sessions:
+        for session_data in lg_sessions.values():
+            compass = session_data.get("behavior_compass", {})
+            if compass:
+                full_data["lintgate_signals"] = {
+                    "signals_state": compass.get("signals_state", {}),
+                    "coherence_trajectory": session_data.get("coherence_trajectory", []),
+                }
+                break
 
     aid = engine.save_snapshot("behavior", summary, full_data)
     lines.append("")
-    lines.append(f"_Details: prism_details(\"{aid}\", section=\"tool_distribution\" or \"tool_transitions\")_")
+    lines.append(
+        f'_Details: prism_details("{aid}", section="tool_distribution" or "tool_transitions")_'
+    )
 
     return "\n".join(lines)

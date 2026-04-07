@@ -1,2 +1,3 @@
 """Prism: holographic Claude Code usage analytics."""
+
 __version__ = "0.2.0"

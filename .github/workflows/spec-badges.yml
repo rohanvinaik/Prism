@@ -1,0 +1,95 @@
+name: Specification Badges
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spec_badges:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+          uv pip install git+https://github.com/rohanvinaik/Wesker.git
+
+      # ── Wesker mutation testing ──────────────────────────────────
+      - name: Run Wesker specification metrics
+        run: uv run python -m Wesker.metrics
+        env:
+          WESKER_COLOR: "1"
+
+      - name: Create badges directory
+        run: mkdir -p .github/badges
+
+      # ── Badge generation ──────────────────────────────────────────
+
+      - name: Generate Mutation Kill Rate Badge
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: "Mutation Kill Rate"
+          label-color: "333"
+          status: "${{ env.MUTATION_KILL_PCT }}% (${{ env.MUTATION_KILLED }}/${{ env.MUTATION_TOTAL }})"
+          color: ${{ env.MUTATION_KILL_PCT == '100' && '2ea043' || 'e5534b' }}
+          path: ".github/badges/mutation-kill-rate.svg"
+
+      - name: "Generate Mean σ Badge"
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: "Mean σ"
+          label-color: "333"
+          status: "${{ env.MEAN_SIGMA }}"
+          color: "8b5cf6"
+          path: ".github/badges/sigma.svg"
+
+      - name: Generate Test Count Badge
+        uses: emibcn/badge-action@v2.0.2
+        with:
+          label: "Tests"
+          label-color: "333"
+          status: "${{ env.TEST_COUNT }} (${{ env.TEST_RATIO }})"
+          color: "2ea043"
+          path: ".github/badges/test-count.svg"
+
+      # ── Push to badges branch ────────────────────────────────────
+
+      - name: Push badges to badges branch
+        if: github.ref == 'refs/heads/master'
+        run: |
+          cp .github/badges/*.svg /tmp/
+          rm -rf .github/badges
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            git fetch origin badges:badges
+            git switch badges
+          else
+            git switch --orphan badges
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p .github/badges
+          cp /tmp/*.svg .github/badges/
+          git add .github/badges/*.svg
+
+          if git diff --cached --quiet; then
+            echo "No badge changes"
+            exit 0
+          fi
+
+          git commit -m "Update spec badges (kill=${{ env.MUTATION_KILL_PCT }}%, σ̄=${{ env.MEAN_SIGMA }}, tests=${{ env.TEST_COUNT }}, ratio=${{ env.TEST_RATIO }})"
+          git push origin badges

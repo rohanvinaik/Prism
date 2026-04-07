@@ -2,15 +2,59 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/prism"]
+
 [project]
-name = "prism"
-version = "0.2.0"
-description = "Holographic Claude Code usage analytics — multi-lens persistent monitor"
+name = "prism-mcp"
+version = "0.5.0"
+description = "Claude Code usage analytics — token economics, behavioral signals, session forensics"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Rohan Vinaik" }]
+keywords = ["claude", "claude-code", "mcp", "analytics", "tokens", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "mcp>=1.0.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=6.0", "ruff>=0.9.0"]
+
+[project.urls]
+Repository = "https://github.com/rohan-vinaik/prism"
+
 [project.scripts]
 prism-mcp = "prism.server:main"
 prism-hook = "prism.hooks:main"
+
+[tool.coverage.run]
+source = ["src/prism"]
+omit = ["src/prism/server.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

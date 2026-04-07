@@ -9,7 +9,6 @@ import hashlib
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 from . import engine
 
@@ -18,7 +17,7 @@ def _project_hash(path: str) -> str:
     return hashlib.sha256(path.encode()).hexdigest()[:12]
 
 
-def _file_exists(root: Path, *candidates: str) -> Optional[str]:
+def _file_exists(root: Path, *candidates: str) -> str | None:
     """Return the first matching filename, or None."""
     for c in candidates:
         if (root / c).exists():
@@ -73,7 +72,10 @@ def _detect_git(root: Path) -> dict:
     try:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
-            cwd=str(root), capture_output=True, text=True, timeout=5,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         clean = result.returncode == 0 and not result.stdout.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -111,10 +113,13 @@ def _detect_secrets_hygiene(root: Path) -> dict:
 def _detect_toolchain(root: Path) -> dict:
     """Check for linter/formatter configuration."""
     tools = {
-        "ruff": _file_exists(root, "ruff.toml", ".ruff.toml") or _has_pyproject_section(root, "ruff"),
+        "ruff": _file_exists(root, "ruff.toml", ".ruff.toml")
+        or _has_pyproject_section(root, "ruff"),
         "mypy": _file_exists(root, "mypy.ini", ".mypy.ini") or _has_pyproject_section(root, "mypy"),
         "prettier": _file_exists(root, ".prettierrc", ".prettierrc.json", ".prettierrc.yml"),
-        "eslint": _file_exists(root, ".eslintrc", ".eslintrc.json", ".eslintrc.yml", "eslint.config.js"),
+        "eslint": _file_exists(
+            root, ".eslintrc", ".eslintrc.json", ".eslintrc.yml", "eslint.config.js"
+        ),
         "lintgate": _file_exists(root, ".claude/lintgate.yaml", "lintgate.yaml"),
     }
     return {k: bool(v) for k, v in tools.items()}
@@ -192,7 +197,7 @@ def assess(project_path: str) -> dict:
     return {"score": score, **checks}
 
 
-def run(project_path: str) -> str:
+def check(project_path: str) -> str:
     """MCP tool entry point. Returns compact summary + persists for LintGate."""
     root = Path(project_path)
     if not root.is_dir():
@@ -203,11 +208,14 @@ def run(project_path: str) -> str:
     phash = _project_hash(project_path)
 
     # Persist for LintGate
-    engine.write_health(phash, {
-        "project": project_path,
-        "score": score,
-        "checks": checks,
-    })
+    engine.write_health(
+        phash,
+        {
+            "project": project_path,
+            "score": score,
+            "checks": checks,
+        },
+    )
 
     # Compact summary
     lines = [f"# Project Health — {root.name}", ""]
@@ -216,13 +224,24 @@ def run(project_path: str) -> str:
 
     status_map = {
         "venv": ("Venv", checks["venv"]["found"], checks["venv"].get("path", "")),
-        "lockfile": ("Lockfile", bool(checks["lockfile"]["found"]),
-                     f"{checks['lockfile']['found'] or 'none'}" + (" (STALE)" if checks["lockfile"]["stale"] else "")),
-        "git": ("Git", checks["git"]["initialized"],
-                ("clean" if checks["git"]["clean"] else "dirty") + (", .gitignore" if checks["git"]["gitignore"] else "")),
+        "lockfile": (
+            "Lockfile",
+            bool(checks["lockfile"]["found"]),
+            f"{checks['lockfile']['found'] or 'none'}"
+            + (" (STALE)" if checks["lockfile"]["stale"] else ""),
+        ),
+        "git": (
+            "Git",
+            checks["git"]["initialized"],
+            ("clean" if checks["git"]["clean"] else "dirty")
+            + (", .gitignore" if checks["git"]["gitignore"] else ""),
+        ),
         "ci": ("CI", checks["ci"]["found"], checks["ci"]["type"] or "none"),
-        "secrets": ("Secrets", checks["secrets"]["env_in_gitignore"] and not checks["secrets"]["env_committed"],
-                    ".env ignored" if checks["secrets"]["env_in_gitignore"] else "unconfigured"),
+        "secrets": (
+            "Secrets",
+            checks["secrets"]["env_in_gitignore"] and not checks["secrets"]["env_committed"],
+            ".env ignored" if checks["secrets"]["env_in_gitignore"] else "unconfigured",
+        ),
     }
 
     for _key, (label, ok, detail) in status_map.items():
@@ -235,6 +254,6 @@ def run(project_path: str) -> str:
     summary = "\n".join(lines)
     aid = engine.save_snapshot("health", summary, {"project": project_path, **checks})
     lines.append("")
-    lines.append(f"_Details: prism_details(\"{aid}\")_")
+    lines.append(f'_Details: prism_details("{aid}")_')
 
     return "\n".join(lines)

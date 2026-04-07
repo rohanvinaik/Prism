@@ -5,7 +5,7 @@ from collections import Counter
 from . import engine, sources
 
 
-def run(period: str = "today", project: str = "") -> str:
+def analyze(period: str = "today", project: str = "") -> str:
     since = sources.period_to_since(period)
     label = {"today": "Today", "week": "This Week", "month": "This Month"}.get(period, period)
     proj = project or None
@@ -37,8 +37,11 @@ def run(period: str = "today", project: str = "") -> str:
     lines.append("## At a Glance")
     lines.append(f"- Sessions: {len(sessions)} | Projects: {len(projects_active)}")
     lines.append(f"- Prompts: {total_prompts} | Tool calls: {total_tools}")
-    lines.append(f"- API tokens: {total_usage.total:,} (cache hit: {total_usage.cache_hit_rate:.0%})")
-    lines.append(f"- RTK saved: {rtk_saved:,}")
+    lines.append(
+        f"- API tokens: {total_usage.total:,} (cache hit: {total_usage.cache_hit_rate:.0%})"
+    )
+    if rtk_cmds:
+        lines.append(f"- RTK saved: {rtk_saved:,}")
 
     if tool_counts:
         top3 = ", ".join(f"{t}({c})" for t, c in tool_counts.most_common(3))

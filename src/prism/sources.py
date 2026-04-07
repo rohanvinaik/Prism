@@ -1,34 +1,93 @@
 """Data source readers for all Prism analytics lenses.
 
-Reads from: Claude Code JSONL sessions, RTK SQLite, stats-cache,
-usage-data facets, LintGate metrics/sessions, Continuity, Mneme.
-All reads are read-only. Graceful degradation if a source is missing.
+Core sources (every Claude Code user has these):
+  - Claude Code JSONL sessions (~/.claude/projects/)
+  - stats-cache.json (~/.claude/stats-cache.json)
+  - usage-data facets (~/.claude/usage-data/facets/)
+  - Prism hook events (~/.claude/prism/)
+
+Optional sources (detected, not required — graceful degradation):
+  - RTK command history (token savings analytics)
+  - LintGate metrics/sessions (code quality signals)
+  - Continuity decisions (session learning database)
+  - Mneme cognitive events (personal knowledge graph)
+
+All reads are read-only. Missing sources return empty results.
 """
 
 import json
+import os
 import sqlite3
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
+import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Optional, Iterator
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 HOME = Path.home()
 CLAUDE_DIR = HOME / ".claude"
 PROJECTS_DIR = CLAUDE_DIR / "projects"
-RTK_DB = HOME / "Library" / "Application Support" / "rtk" / "history.db"
 STATS_CACHE = CLAUDE_DIR / "stats-cache.json"
 FACETS_DIR = CLAUDE_DIR / "usage-data" / "facets"
+
+# Derive user prefix from home path for project name display.
+# ~/.claude/projects/ stores dirs like "-Users-alice-tools-Prism";
+# we strip the home-derived prefix to show "tools-Prism".
+_home_str = str(HOME).lstrip("/").replace("/", "-")
+USER_PREFIX = f"-{_home_str}-"
+
+
+# ---------------------------------------------------------------------------
+# Optional source detection
+# ---------------------------------------------------------------------------
+
+
+def _find_rtk_db() -> Path | None:
+    """Locate RTK history database (platform-aware)."""
+    if sys.platform == "darwin":
+        candidate = HOME / "Library" / "Application Support" / "rtk" / "history.db"
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME", str(HOME / ".local" / "share"))
+        candidate = Path(xdg) / "rtk" / "history.db"
+    return candidate if candidate.is_file() else None
+
+
+def _find_mneme_db() -> Path | None:
+    """Locate Mneme cognitive events database."""
+    candidates = [
+        HOME / "MentalAtlas" / "mneme" / "data" / "mneme.db",
+        HOME / ".local" / "share" / "mneme" / "mneme.db",
+    ]
+    env = os.environ.get("MNEME_DB")
+    if env:
+        candidates.insert(0, Path(env))
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+RTK_DB: Path | None = _find_rtk_db()
 LINTGATE_METRICS_DIR = CLAUDE_DIR / "lintgate" / "metrics"
 LINTGATE_SESSION_DIR = CLAUDE_DIR / "lintgate" / "session"
 CONTINUITY_DB = CLAUDE_DIR / "continuity" / "learning.db"
-MNEME_DB = HOME / "MentalAtlas" / "mneme" / "data" / "mneme.db"
+MNEME_DB: Path | None = _find_mneme_db()
 
-USER_PREFIX = "-Users-rohanvinaik-"
+
+def available_integrations() -> dict[str, bool]:
+    """Report which optional data sources are present on this system."""
+    return {
+        "rtk": RTK_DB is not None,
+        "lintgate": LINTGATE_METRICS_DIR.is_dir() or LINTGATE_SESSION_DIR.is_dir(),
+        "continuity": CONTINUITY_DB.is_file(),
+        "mneme": MNEME_DB is not None,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TokenUsage:
@@ -58,7 +117,7 @@ class TokenUsage:
 @dataclass
 class ToolCallRecord:
     name: str
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 @dataclass
@@ -66,8 +125,8 @@ class SessionData:
     session_id: str
     project: str
     project_dir: str = ""
-    timestamp_start: Optional[str] = None
-    timestamp_end: Optional[str] = None
+    timestamp_start: str | None = None
+    timestamp_end: str | None = None
     usage: TokenUsage = field(default_factory=TokenUsage)
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     prompt_count: int = 0
@@ -80,15 +139,23 @@ class SessionData:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def project_name(dir_name: str) -> str:
-    """Convert project directory name to readable form."""
-    for prefix in (USER_PREFIX, "Users-rohanvinaik-"):
-        if dir_name.startswith(prefix):
-            return dir_name[len(prefix):]
+    """Convert project directory name to readable form.
+
+    Claude Code stores projects as e.g. "-Users-alice-tools-Prism".
+    Strip the home-derived prefix to show "tools-Prism".
+    """
+    if dir_name.startswith(USER_PREFIX):
+        return dir_name[len(USER_PREFIX) :]
+    # Fallback: strip any leading "-Users-*-" pattern
+    if dir_name.startswith("-Users-") or dir_name.startswith("-home-"):
+        parts = dir_name.lstrip("-").split("-", 2)
+        return parts[2] if len(parts) > 2 else dir_name
     return dir_name
 
 
-def parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+def parse_timestamp(ts: str | None) -> datetime | None:
     if not ts:
         return None
     try:
@@ -97,9 +164,9 @@ def parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def period_to_since(period: str) -> Optional[datetime]:
+def period_to_since(period: str) -> datetime | None:
     """Convert a period name to a UTC cutoff datetime."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     match period:
         case "today":
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -115,7 +182,7 @@ def period_to_since(period: str) -> Optional[datetime]:
             return now - timedelta(days=7)
 
 
-def _safe_read_json(path: Path) -> Optional[dict | list]:
+def _safe_read_json(path: Path) -> dict | list | None:
     try:
         return json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
@@ -139,7 +206,8 @@ def _safe_sqlite(db_path: Path, query: str, params: tuple = ()) -> list[dict]:
 # Claude Code JSONL sessions
 # ---------------------------------------------------------------------------
 
-def _accumulate_assistant(obj: dict, session: SessionData, ts: Optional[str]) -> None:
+
+def _accumulate_assistant(obj: dict, session: SessionData, ts: str | None) -> None:
     """Extract token usage and tool calls from an assistant message."""
     session.assistant_turns += 1
     usage = obj.get("message", {}).get("usage", {})
@@ -180,7 +248,7 @@ def _collect_subagents(path: Path, proj: str, session: SessionData) -> None:
             session.subagent_usage = session.subagent_usage + sub.usage
 
 
-def parse_session(path: Path, proj: str) -> Optional[SessionData]:
+def parse_session(path: Path, proj: str) -> SessionData | None:
     """Parse a single session JSONL file."""
     try:
         text = path.read_text(errors="replace")
@@ -188,7 +256,9 @@ def parse_session(path: Path, proj: str) -> Optional[SessionData]:
         return None
 
     session = SessionData(
-        session_id=path.stem, project=proj, project_dir=path.parent.name,
+        session_id=path.stem,
+        project=proj,
+        project_dir=path.parent.name,
     )
     last_ts = None
 
@@ -225,7 +295,7 @@ def parse_session(path: Path, proj: str) -> Optional[SessionData]:
 def _file_modified_since(path: Path, cutoff: datetime) -> bool:
     """Check if file was modified after cutoff (avoids parsing stale files)."""
     try:
-        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         return mtime >= cutoff
     except OSError:
         return False
@@ -237,7 +307,7 @@ def _session_in_range(session: SessionData, since: datetime) -> bool:
     return not ts or ts >= since
 
 
-def _matching_projects(project_filter: Optional[str]) -> Iterator[tuple[Path, str]]:
+def _matching_projects(project_filter: str | None) -> Iterator[tuple[Path, str]]:
     """Yield (proj_dir, proj_name) for matching project directories."""
     if not PROJECTS_DIR.is_dir():
         return
@@ -251,8 +321,8 @@ def _matching_projects(project_filter: Optional[str]) -> Iterator[tuple[Path, st
 
 
 def iter_sessions(
-    since: Optional[datetime] = None,
-    project_filter: Optional[str] = None,
+    since: datetime | None = None,
+    project_filter: str | None = None,
 ) -> Iterator[SessionData]:
     """Iterate over all Claude Code sessions, optionally filtered."""
     for proj_dir, proj in _matching_projects(project_filter):
@@ -271,12 +341,13 @@ def iter_sessions(
 # RTK command history
 # ---------------------------------------------------------------------------
 
+
 def read_rtk(
-    since: Optional[datetime] = None,
-    project_filter: Optional[str] = None,
+    since: datetime | None = None,
+    project_filter: str | None = None,
     limit: int = 1000,
 ) -> list[dict]:
-    if not RTK_DB.is_file():
+    if not RTK_DB or not RTK_DB.is_file():
         return []
     try:
         conn = sqlite3.connect(str(RTK_DB), timeout=5)
@@ -305,6 +376,7 @@ def read_rtk(
 # Claude Code stats-cache (daily rollups)
 # ---------------------------------------------------------------------------
 
+
 def read_stats_cache() -> dict[str, dict]:
     """Returns {date_str: {messageCount, sessionCount, toolCallCount}}."""
     raw = _safe_read_json(STATS_CACHE)
@@ -313,13 +385,18 @@ def read_stats_cache() -> dict[str, dict]:
     # Stats-cache v2: dailyActivity is a list of {date, messageCount, ...}
     daily_list = raw.get("dailyActivity", [])
     if isinstance(daily_list, list):
-        return {entry["date"]: entry for entry in daily_list if isinstance(entry, dict) and "date" in entry}
+        return {
+            entry["date"]: entry
+            for entry in daily_list
+            if isinstance(entry, dict) and "date" in entry
+        }
     return {}
 
 
 # ---------------------------------------------------------------------------
 # Claude Code usage-data facets (session outcomes)
 # ---------------------------------------------------------------------------
+
 
 def read_facets() -> list[dict]:
     if not FACETS_DIR.is_dir():
@@ -336,7 +413,8 @@ def read_facets() -> list[dict]:
 # LintGate metrics + session memory
 # ---------------------------------------------------------------------------
 
-def read_lintgate_metrics(since: Optional[datetime] = None) -> list[dict]:
+
+def read_lintgate_metrics(since: datetime | None = None) -> list[dict]:
     if not LINTGATE_METRICS_DIR.is_dir():
         return []
     results = []
@@ -344,7 +422,7 @@ def read_lintgate_metrics(since: Optional[datetime] = None) -> list[dict]:
         date_str = f.stem.replace("lintgate_", "")
         if since:
             try:
-                file_date = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
+                file_date = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=UTC)
                 if file_date < since:
                     continue
             except ValueError:
@@ -373,7 +451,8 @@ def read_lintgate_sessions() -> dict[str, dict]:
 # Continuity (decisions)
 # ---------------------------------------------------------------------------
 
-def read_continuity_decisions(since: Optional[datetime] = None) -> list[dict]:
+
+def read_continuity_decisions(since: datetime | None = None) -> list[dict]:
     if not CONTINUITY_DB.is_file():
         return []
     query = """
@@ -394,12 +473,14 @@ def read_continuity_decisions(since: Optional[datetime] = None) -> list[dict]:
 # Mneme (cognitive state)
 # ---------------------------------------------------------------------------
 
+
 def read_mneme_recent(hours: int = 24) -> dict:
-    if not MNEME_DB.is_file():
+    db = MNEME_DB
+    if not db or not db.is_file():
         return {}
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
     try:
-        conn = sqlite3.connect(str(MNEME_DB), timeout=5)
+        conn = sqlite3.connect(str(db), timeout=5)
         conn.row_factory = sqlite3.Row
 
         event_row = conn.execute(

@@ -15,9 +15,8 @@ Directory layout:
 
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional
 
 PRISM_DIR = Path.home() / ".claude" / "prism"
 SNAPSHOTS_DIR = PRISM_DIR / "snapshots"
@@ -33,6 +32,7 @@ LIST_TRUNCATION = 20
 # ---------------------------------------------------------------------------
 # Directory setup
 # ---------------------------------------------------------------------------
+
 
 def _ensure_dirs() -> None:
     for d in (SNAPSHOTS_DIR, SESSIONS_DIR, DAILY_DIR, HEALTH_DIR):
@@ -58,6 +58,7 @@ def analysis_id() -> str:
 # Snapshots (compact-first pattern)
 # ---------------------------------------------------------------------------
 
+
 def save_snapshot(tool: str, summary: str, data: dict) -> str:
     """Persist full analysis results. Returns analysis_id.
 
@@ -70,7 +71,7 @@ def save_snapshot(tool: str, summary: str, data: dict) -> str:
         "_meta": {
             "analysis_id": aid,
             "tool": tool,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "schema_version": SCHEMA_VERSION,
         },
         "summary": summary,
@@ -81,7 +82,7 @@ def save_snapshot(tool: str, summary: str, data: dict) -> str:
     return aid
 
 
-def load_snapshot(aid: str) -> Optional[dict]:
+def load_snapshot(aid: str) -> dict | None:
     path = SNAPSHOTS_DIR / f"{aid}.json"
     if not path.is_file():
         return None
@@ -155,10 +156,11 @@ def query_snapshot(
 # Session events (hooks write here)
 # ---------------------------------------------------------------------------
 
+
 def append_event(session_id: str, event: dict) -> None:
     """Append a single event to the session's JSONL stream."""
     _ensure_dirs()
-    event["ts"] = datetime.now(timezone.utc).isoformat()
+    event["ts"] = datetime.now(UTC).isoformat()
     path = SESSIONS_DIR / f"{session_id}.jsonl"
     with open(path, "a") as f:
         f.write(json.dumps(event, default=str) + "\n")
@@ -182,11 +184,12 @@ def read_events(session_id: str) -> list[dict]:
 # Daily summaries (SessionEnd hook writes here)
 # ---------------------------------------------------------------------------
 
+
 def append_daily_summary(summary: dict) -> None:
     """Append a session summary to today's daily JSONL."""
     _ensure_dirs()
     summary["schema_version"] = SCHEMA_VERSION
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(UTC).strftime("%Y%m%d")
     path = DAILY_DIR / f"{today}.jsonl"
     with open(path, "a") as f:
         f.write(json.dumps(summary, default=str) + "\n")
@@ -217,13 +220,13 @@ def write_bridge(efficiency: dict) -> None:
     """Write latest session efficiency metrics for LintGate nudge system."""
     _ensure_dirs()
     efficiency["_meta"] = {
-        "updated": datetime.now(timezone.utc).isoformat(),
+        "updated": datetime.now(UTC).isoformat(),
         "schema_version": SCHEMA_VERSION,
     }
     BRIDGE_FILE.write_text(json.dumps(efficiency, indent=2, default=str))
 
 
-def read_bridge() -> Optional[dict]:
+def read_bridge() -> dict | None:
     if not BRIDGE_FILE.is_file():
         return None
     try:
@@ -236,18 +239,19 @@ def read_bridge() -> Optional[dict]:
 # Project health state (LintGate reads these)
 # ---------------------------------------------------------------------------
 
+
 def write_health(project_hash: str, health: dict) -> None:
     """Write project health state for LintGate consumption."""
     _ensure_dirs()
     health["_meta"] = {
-        "updated": datetime.now(timezone.utc).isoformat(),
+        "updated": datetime.now(UTC).isoformat(),
         "schema_version": SCHEMA_VERSION,
     }
     path = HEALTH_DIR / f"{project_hash}.json"
     path.write_text(json.dumps(health, indent=2, default=str))
 
 
-def read_health(project_hash: str) -> Optional[dict]:
+def read_health(project_hash: str) -> dict | None:
     path = HEALTH_DIR / f"{project_hash}.json"
     if not path.is_file():
         return None

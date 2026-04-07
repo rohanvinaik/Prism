@@ -10,14 +10,26 @@ results; leave empty for cross-project aggregate view.
 
 from mcp.server.fastmcp import FastMCP
 
-from . import behavior, economics, engine, fix, forensics, health, pr_ready, recommend, snapshot, trajectory, trends
+from . import (
+    behavior,
+    economics,
+    engine,
+    fix,
+    forensics,
+    health,
+    pr_ready,
+    recommend,
+    snapshot,
+    trajectory,
+    trends,
+)
 
 mcp = FastMCP(
     "Prism",
     instructions=(
         "Holographic Claude Code usage analytics. "
-        "7 tools: snapshot, economics, behavior, trajectory, forensics, "
-        "details (drill-down), health (setup maturity). "
+        "11 tools: snapshot, economics, behavior, trajectory, forensics, "
+        "trends, details (drill-down), health, recommend, fix, pr_ready. "
         "Each tool returns a compact summary + snapshot_id. "
         "Call prism_details(id, section) to drill into full data on demand. "
         "IMPORTANT: Pass the current project name in the `project` param "
@@ -34,7 +46,7 @@ def prism_snapshot(period: str = "today", project: str = "") -> str:
         period: today, week, month.
         project: Filter to project name (substring match). Empty for all projects.
     """
-    return snapshot.run(period, project)
+    return snapshot.analyze(period, project)
 
 
 @mcp.tool()
@@ -45,7 +57,7 @@ def prism_economics(period: str = "week", project: str = "") -> str:
         period: today, week, month, quarter, all.
         project: Filter to project name (substring match). Empty for all.
     """
-    return economics.run(period, project)
+    return economics.analyze(period, project)
 
 
 @mcp.tool()
@@ -56,7 +68,7 @@ def prism_behavior(period: str = "week", project: str = "") -> str:
         period: today, week, month, quarter, all.
         project: Filter to project name (substring match). Empty for all.
     """
-    return behavior.run(period, project)
+    return behavior.analyze(period, project)
 
 
 @mcp.tool()
@@ -67,7 +79,7 @@ def prism_trajectory(period: str = "month", project: str = "") -> str:
         period: week, month, quarter.
         project: Filter to project name (substring match). Empty for all.
     """
-    return trajectory.run(period, project)
+    return trajectory.analyze(period, project)
 
 
 @mcp.tool()
@@ -79,7 +91,7 @@ def prism_forensics(session_id: str = "", project: str = "", last_n: int = 1) ->
         project: Filter to project (substring match).
         last_n: Number of most recent sessions to analyze (default 1).
     """
-    return forensics.run(session_id, project, last_n)
+    return forensics.analyze(session_id, project, last_n)
 
 
 @mcp.tool()
@@ -99,7 +111,6 @@ def prism_details(snapshot_id: str, section: str = "", path: str = "", max_items
 
 
 @mcp.tool()
-@mcp.tool()
 def prism_trends(days: int = 7, project: str = "") -> str:
     """Cross-session trends from hook daily summaries.
 
@@ -110,7 +121,7 @@ def prism_trends(days: int = 7, project: str = "") -> str:
         days: Number of days to analyze (default 7).
         project: Filter to project name (substring match). Empty for all.
     """
-    return trends.run(days, project)
+    return trends.analyze(days, project)
 
 
 @mcp.tool()
@@ -124,7 +135,7 @@ def prism_health(project_path: str = "") -> str:
     """
     if not project_path:
         return "Error: project_path is required (MCP server cwd is not project-specific)."
-    return health.run(project_path)
+    return health.check(project_path)
 
 
 @mcp.tool()
@@ -138,7 +149,7 @@ def prism_recommend(project_path: str = "", period: str = "week", min_confidence
         period: Time window for behavioral analysis — today, week, month.
         min_confidence: Only show recommendations above this threshold (0-100).
     """
-    return recommend.run(project_path, period, min_confidence)
+    return recommend.analyze(project_path, period, min_confidence)
 
 
 @mcp.tool()
@@ -153,7 +164,7 @@ def prism_fix(project_path: str, dry_run: bool = True) -> str:
         project_path: Absolute path to project root.
         dry_run: Preview fixes without applying (default True).
     """
-    return fix.run(project_path, dry_run)
+    return fix.apply_fixes(project_path, dry_run)
 
 
 @mcp.tool()
@@ -166,7 +177,7 @@ def prism_pr_ready(project_path: str) -> str:
     Args:
         project_path: Absolute path to project root.
     """
-    return pr_ready.run(project_path)
+    return pr_ready.assess(project_path)
 
 
 def main():

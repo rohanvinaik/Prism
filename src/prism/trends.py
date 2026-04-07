@@ -93,15 +93,12 @@ def _compute_trends(summaries: list[dict]) -> dict:
     return trends
 
 
-def run(days: int = 7, project: str = "") -> str:
+def analyze(days: int = 7, project: str = "") -> str:
     summaries = engine.read_daily_summaries(days=days)
 
     # Filter by project if specified
     if project:
-        summaries = [
-            s for s in summaries
-            if project.lower() in (s.get("project") or "").lower()
-        ]
+        summaries = [s for s in summaries if project.lower() in (s.get("project") or "").lower()]
 
     trends = _compute_trends(summaries)
 
@@ -127,7 +124,9 @@ def run(days: int = 7, project: str = "") -> str:
 
     tc = trends.get("tool_calls")
     if tc:
-        lines.append(f"- Tool calls: {tc['total']} total, {tc['avg_per_session']}/session ({tc['trend']})")
+        lines.append(
+            f"- Tool calls: {tc['total']} total, {tc['avg_per_session']}/session ({tc['trend']})"
+        )
 
     dur = trends.get("duration")
     if dur:
@@ -150,6 +149,6 @@ def run(days: int = 7, project: str = "") -> str:
 
     aid = engine.save_snapshot("trends", summary, full_data)
     lines.append("")
-    lines.append(f"_Details: prism_details(\"{aid}\", section=\"trends\" or \"by_date\")_")
+    lines.append(f'_Details: prism_details("{aid}", section="trends" or "by_date")_')
 
     return "\n".join(lines)

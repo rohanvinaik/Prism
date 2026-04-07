@@ -21,13 +21,19 @@ def _git_status(project_path: str) -> dict:
     try:
         branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=project_path, capture_output=True, text=True, timeout=5,
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            cwd=project_path, capture_output=True, text=True, timeout=5,
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        uncommitted = len([l for l in status.stdout.splitlines() if l.strip()])
+        uncommitted = len([line for line in status.stdout.splitlines() if line.strip()])
         return {
             "branch": branch.stdout.strip() if branch.returncode == 0 else "unknown",
             "clean": uncommitted == 0,
@@ -49,6 +55,7 @@ def _lintgate_status(project_path: str) -> dict:
         return {"available": False}
 
     import json
+
     try:
         data = json.loads(runs[0].read_text())
         counts = data.get("counts", {})
@@ -62,7 +69,7 @@ def _lintgate_status(project_path: str) -> dict:
         return {"available": False}
 
 
-def run(project_path: str) -> str:
+def assess(project_path: str) -> str:
     """Assess PR readiness. Returns pass/fail with blockers."""
     if not project_path or not Path(project_path).is_dir():
         return "Error: project_path required."

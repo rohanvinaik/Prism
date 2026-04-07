@@ -6,7 +6,29 @@ Deep dive into specific session(s) across all data sources.
 from collections import Counter
 
 from . import engine, sources
-from .engine import read_events, read_bridge
+from .engine import read_bridge, read_events
+
+
+def _session_duration_str(s: sources.SessionData) -> str:
+    """Compute duration string from session timestamps."""
+    start = sources.parse_timestamp(s.timestamp_start)
+    end = sources.parse_timestamp(s.timestamp_end)
+    if start and end:
+        return f", {int((end - start).total_seconds() / 60)}min"
+    return ""
+
+
+def _session_error_str(s: sources.SessionData) -> str:
+    """Compute error rate string from hook events."""
+    hook_events = engine.read_events(s.session_id)
+    if not hook_events:
+        return ""
+    tool_events = [e for e in hook_events if e.get("event") == "tool_use"]
+    if not tool_events:
+        return ""
+    errors = sum(1 for e in tool_events if e.get("error"))
+    rate = errors / len(tool_events)
+    return f", {rate:.0%} errors" if rate > 0 else ""
 
 
 def _session_compact(s: sources.SessionData) -> str:
@@ -14,10 +36,55 @@ def _session_compact(s: sources.SessionData) -> str:
     ts = s.timestamp_start[:16] if s.timestamp_start else "?"
     top3 = Counter(tc.name for tc in s.tool_calls).most_common(3)
     tools_str = ", ".join(f"{t}({c})" for t, c in top3)
+    dur_str = _session_duration_str(s)
+    err_str = _session_error_str(s)
+
     return (
         f"[{ts}] **{s.project}**: {s.usage.total:,} tokens, "
         f"{s.prompt_count} prompts, {len(s.tool_calls)} calls ({tools_str})"
+        f"{dur_str}{err_str}"
     )
+
+
+def _enrich_hook_data(data: dict, s: sources.SessionData) -> None:
+    """Enrich session data with real-time hook events."""
+    hook_events = read_events(s.session_id)
+    if not hook_events:
+        return
+    tool_hook_events = [e for e in hook_events if e.get("event") == "tool_use"]
+    hook_errors = sum(1 for e in tool_hook_events if e.get("error"))
+    total_output_bytes = sum(e.get("output_bytes", 0) for e in tool_hook_events)
+    compactions = sum(1 for e in hook_events if e.get("event") == "pre_compact")
+    data["realtime"] = {
+        "hook_events": len(hook_events),
+        "tool_calls_observed": len(tool_hook_events),
+        "errors_detected": hook_errors,
+        "error_rate": round(hook_errors / max(len(tool_hook_events), 1), 3),
+        "total_output_bytes": total_output_bytes,
+        "compactions": compactions,
+    }
+
+
+def _enrich_bridge_data(data: dict, s: sources.SessionData) -> None:
+    """Enrich session data with bridge efficiency score."""
+    bridge = read_bridge()
+    if bridge and bridge.get("session_id") == s.session_id:
+        data["efficiency_score"] = bridge.get("efficiency_score")
+
+
+def _enrich_rtk_data(data, s):
+    # RTK commands overlapping this session
+    start_dt = sources.parse_timestamp(s.timestamp_start)
+    if start_dt:
+        rtk_cmds = sources.read_rtk(since=start_dt, limit=200)
+        if rtk_cmds and s.timestamp_end:
+            in_range = [c for c in rtk_cmds if c.get("timestamp", "") <= s.timestamp_end]
+            if in_range:
+                data["rtk"] = {
+                    "commands": len(in_range),
+                    "saved": sum(c.get("saved_tokens", 0) for c in in_range),
+                }
+    return data
 
 
 def _session_full(s: sources.SessionData) -> dict:
@@ -69,49 +136,17 @@ def _session_full(s: sources.SessionData) -> dict:
             "pct_of_session": round(s.subagent_usage.total / max(s.usage.total, 1) * 100, 1),
         }
 
-    # RTK commands overlapping this session
-    start_dt = sources.parse_timestamp(s.timestamp_start)
-    if start_dt:
-        rtk_cmds = sources.read_rtk(since=start_dt, limit=200)
-        if rtk_cmds and s.timestamp_end:
-            in_range = [c for c in rtk_cmds if c.get("timestamp", "") <= s.timestamp_end]
-            if in_range:
-                data["rtk"] = {
-                    "commands": len(in_range),
-                    "saved": sum(c.get("saved_tokens", 0) for c in in_range),
-                }
+    data = _enrich_rtk_data(data, s)
 
-    # Hook-captured real-time data (richer than JSONL parsing)
-    hook_events = read_events(s.session_id)
-    if hook_events:
-        tool_hook_events = [e for e in hook_events if e.get("event") == "tool_use"]
-        hook_errors = sum(1 for e in tool_hook_events if e.get("error"))
-        total_output_bytes = sum(e.get("output_bytes", 0) for e in tool_hook_events)
-        compactions = sum(1 for e in hook_events if e.get("event") == "pre_compact")
-
-        data["realtime"] = {
-            "hook_events": len(hook_events),
-            "tool_calls_observed": len(tool_hook_events),
-            "errors_detected": hook_errors,
-            "error_rate": round(hook_errors / max(len(tool_hook_events), 1), 3),
-            "total_output_bytes": total_output_bytes,
-            "compactions": compactions,
-        }
-
-    # Bridge efficiency data (latest session metrics)
-    bridge = read_bridge()
-    if bridge and bridge.get("session_id") == s.session_id:
-        data["efficiency_score"] = bridge.get("efficiency_score")
+    _enrich_hook_data(data, s)
+    _enrich_bridge_data(data, s)
 
     return data
 
 
-def run(session_id: str = "", project: str = "", last_n: int = 1) -> str:
+def analyze(session_id: str = "", project: str = "", last_n: int = 1) -> str:
     if session_id:
-        targets = [
-            s for s in sources.iter_sessions()
-            if s.session_id.startswith(session_id)
-        ]
+        targets = [s for s in sources.iter_sessions() if s.session_id.startswith(session_id)]
         if not targets:
             return f"No session found matching '{session_id}'"
     else:
@@ -136,6 +171,8 @@ def run(session_id: str = "", project: str = "", last_n: int = 1) -> str:
 
     aid = engine.save_snapshot("forensics", summary, full_data)
     lines.append("")
-    lines.append(f"_Details: prism_details(\"{aid}\", section=\"sessions\", path=\"0.tool_distribution\")_")
+    lines.append(
+        f'_Details: prism_details("{aid}", section="sessions", path="0.tool_distribution")_'
+    )
 
     return "\n".join(lines)
