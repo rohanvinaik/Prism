@@ -87,6 +87,27 @@ def _enrich_rtk_data(data, s):
     return data
 
 
+def _subagent_summary(sub: sources.SessionData) -> dict:
+    """Per-subagent breakdown for forensics drill-down."""
+    tool_counts = Counter(tc.name for tc in sub.tool_calls)
+    start = sources.parse_timestamp(sub.timestamp_start)
+    end = sources.parse_timestamp(sub.timestamp_end)
+    duration_min = int((end - start).total_seconds() / 60) if start and end else None
+    reads = sum(1 for tc in sub.tool_calls if tc.name in ("Read", "Grep", "Glob"))
+    edits = sum(1 for tc in sub.tool_calls if tc.name in ("Edit", "Write"))
+    return {
+        "agent_id": sub.agent_id,
+        "type": sub.agent_type,
+        "tokens": sub.usage.total,
+        "cache_hit_rate": round(sub.usage.cache_hit_rate, 3),
+        "duration_min": duration_min,
+        "prompts": sub.prompt_count,
+        "tool_calls": len(sub.tool_calls),
+        "tool_distribution": dict(tool_counts.most_common()),
+        "read_edit_ratio": round(reads / max(edits, 1), 1) if edits else None,
+    }
+
+
 def _session_full(s: sources.SessionData) -> dict:
     """Full session data for disk persistence."""
     tool_counts = Counter(tc.name for tc in s.tool_calls)
@@ -130,10 +151,18 @@ def _session_full(s: sources.SessionData) -> dict:
     }
 
     if s.subagent_count > 0:
+        compact = sum(1 for sub in s.subagents if sub.agent_type == "compact")
+        spawned = s.subagent_count - compact
         data["subagents"] = {
             "count": s.subagent_count,
+            "compact": compact,
+            "spawned": spawned,
             "tokens": s.subagent_usage.total,
             "pct_of_session": round(s.subagent_usage.total / max(s.usage.total, 1) * 100, 1),
+            "agents": [
+                _subagent_summary(sub)
+                for sub in sorted(s.subagents, key=lambda x: x.usage.total, reverse=True)
+            ],
         }
 
     data = _enrich_rtk_data(data, s)

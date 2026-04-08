@@ -133,6 +133,9 @@ class SessionData:
     assistant_turns: int = 0
     subagent_count: int = 0
     subagent_usage: TokenUsage = field(default_factory=TokenUsage)
+    subagents: list["SessionData"] = field(default_factory=list)
+    agent_id: str = ""
+    agent_type: str = ""  # "compact" or "spawned" (only set for subagents)
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +247,9 @@ def _collect_subagents(path: Path, proj: str, session: SessionData) -> None:
     for sub_jsonl in session_subdir.rglob("*.jsonl"):
         sub = parse_session(sub_jsonl, proj)
         if sub and sub.usage.total > 0:
+            sub.agent_id = sub_jsonl.stem
+            sub.agent_type = "compact" if "compact" in sub_jsonl.stem else "spawned"
+            session.subagents.append(sub)
             session.subagent_count += 1
             session.subagent_usage = session.subagent_usage + sub.usage
 

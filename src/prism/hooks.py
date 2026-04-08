@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from typing import Any
 
-from . import engine
+from . import engine, phase_matcher
 
 # Anomaly thresholds
 CONSECUTIVE_ERROR_THRESHOLD = 3
@@ -47,8 +47,27 @@ def _check_consecutive_errors(events: list[dict]) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _summarize_tool_input(tool_name: str, tool_input: Any) -> str:
+    """Extract a one-line summary from tool input for phase tracking."""
+    if not isinstance(tool_input, dict):
+        return str(tool_input)[:60] if tool_input else ""
+    if tool_name in ("Read", "Edit", "Write", "NotebookEdit"):
+        return tool_input.get("file_path", tool_input.get("path", ""))
+    if tool_name == "Bash":
+        return tool_input.get("command", "")[:80]
+    if tool_name in ("Grep", "Glob"):
+        return f"{tool_input.get('pattern', '')} in {tool_input.get('path', '.')}"
+    if tool_name == "Agent":
+        return tool_input.get("prompt", "")[:60]
+    if tool_name.startswith("mcp__"):
+        for v in tool_input.values():
+            if isinstance(v, str) and v:
+                return v[:60]
+    return ""
+
+
 def handle_post_tool_use(data: dict) -> dict:
-    """Record tool execution. Emit warning on consecutive errors."""
+    """Record tool execution + update phase matcher."""
     sid = _session_id(data)
     tool_name = data.get("tool_name", "unknown")
 
@@ -68,6 +87,11 @@ def handle_post_tool_use(data: dict) -> dict:
         event["error"] = False
 
     engine.append_event(sid, event)
+
+    # Phase matcher — record tool and input summary
+    tool_input = data.get("tool_input", {})
+    summary = _summarize_tool_input(tool_name, tool_input)
+    phase_matcher.record_tool(sid, tool_name, summary)
 
     # Anomaly: consecutive errors
     if event.get("error"):
@@ -182,7 +206,7 @@ def handle_session_end(data: dict) -> dict:
 
 
 def handle_pre_compact(data: dict) -> dict:
-    """Record compaction boundary. Silent."""
+    """Record compaction boundary. Inject narrative focus frame."""
     sid = _session_id(data)
     events = engine.read_events(sid)
     tool_count = sum(1 for e in events if e.get("event") == "tool_use")
@@ -194,6 +218,27 @@ def handle_pre_compact(data: dict) -> dict:
             "tools_so_far": tool_count,
         },
     )
+
+    # Build narrative frame for compact focus
+    frame = phase_matcher.build_narrative_frame(sid)
+    if frame:
+        return {
+            "additionalContext": (
+                f"[Prism] Compact focus: {frame}"
+            )
+        }
+    return {}
+
+
+def handle_user_prompt(data: dict) -> dict:
+    """Capture user prompt text for narrative frame building. Silent."""
+    sid = _session_id(data)
+    # UserPromptSubmit delivers text in userMessage or message
+    text = data.get("userMessage", "") or data.get("message", "")
+    if isinstance(text, dict):
+        text = text.get("content", "")
+    if isinstance(text, str) and text.strip():
+        phase_matcher.record_user_text(sid, text.strip())
     return {}
 
 
@@ -207,6 +252,7 @@ HANDLERS = {
     "SessionEnd": handle_session_end,
     "Stop": handle_stop,
     "PreCompact": handle_pre_compact,
+    "UserPromptSubmit": handle_user_prompt,
 }
 
 
