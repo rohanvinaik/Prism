@@ -4,24 +4,26 @@ import pytest
 
 from prism.message_classifier import classify
 
-
 # =====================================================================
 # Directive
 # =====================================================================
 
 
 class TestDirective:
-    @pytest.mark.parametrize("text", [
-        "implement the compaction analyzer",
-        "Fix the bug in forensics.py",
-        "add a test for the new feature",
-        "refactor this module",
-        "run the tests",
-        "check if the build passes",
-        "let's move on to the next feature",
-        "now build the aggregate view",
-        "next, write the MCP tool",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "implement the compaction analyzer",
+            "Fix the bug in forensics.py",
+            "add a test for the new feature",
+            "refactor this module",
+            "run the tests",
+            "check if the build passes",
+            "let's move on to the next feature",
+            "now build the aggregate view",
+            "next, write the MCP tool",
+        ],
+    )
     def test_imperative_verbs(self, text):
         r = classify(text)
         assert r.label == "directive", f"{text!r} → {r.label} ({r.signals})"
@@ -47,19 +49,22 @@ class TestDirective:
 
 
 class TestContinuation:
-    @pytest.mark.parametrize("text", [
-        "yes",
-        "yep",
-        "ok",
-        "sure",
-        "sounds good",
-        "go for it",
-        "fair enough",
-        "perfect",
-        "got it",
-        "continue",
-        "keep going",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "yes",
+            "yep",
+            "ok",
+            "sure",
+            "sounds good",
+            "go for it",
+            "fair enough",
+            "perfect",
+            "got it",
+            "continue",
+            "keep going",
+        ],
+    )
     def test_short_affirmatives(self, text):
         r = classify(text)
         assert r.label == "continuation", f"{text!r} → {r.label} ({r.signals})"
@@ -76,15 +81,18 @@ class TestContinuation:
 
 
 class TestClarification:
-    @pytest.mark.parametrize("text", [
-        "why did you skip the tests?",
-        "what does this function do?",
-        "how does the phase matcher work?",
-        "can you explain the aggregation logic?",
-        "help me understand this diff",
-        "walk me through the new module",
-        "is this the right approach?",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "why did you skip the tests?",
+            "what does this function do?",
+            "how does the phase matcher work?",
+            "can you explain the aggregation logic?",
+            "help me understand this diff",
+            "walk me through the new module",
+            "is this the right approach?",
+        ],
+    )
     def test_questions(self, text):
         r = classify(text)
         assert r.label == "clarification", f"{text!r} → {r.label} ({r.signals})"

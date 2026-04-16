@@ -64,9 +64,7 @@ def _tools_since(events: list[dict], start_idx: int) -> int:
     """Count tool_use events after start_idx (exclusive)."""
     if start_idx < 0:
         return sum(1 for e in events if e.get("event") == "tool_use")
-    return sum(
-        1 for e in events[start_idx + 1:] if e.get("event") == "tool_use"
-    )
+    return sum(1 for e in events[start_idx + 1 :] if e.get("event") == "tool_use")
 
 
 def _last_n_tool_kinds(events: list[dict], n: int) -> list[str]:
@@ -111,9 +109,7 @@ def should_compact(
     if tools_since_compact >= MIN_TOOLS_SINCE_LAST_COMPACT:
         passed.append(f"tools_since_compact>={MIN_TOOLS_SINCE_LAST_COMPACT}")
     else:
-        failed.append(
-            f"tools_since_compact={tools_since_compact}<{MIN_TOOLS_SINCE_LAST_COMPACT}"
-        )
+        failed.append(f"tools_since_compact={tools_since_compact}<{MIN_TOOLS_SINCE_LAST_COMPACT}")
 
     # Condition 2: not in edit burst
     if not in_edit_burst:
@@ -125,9 +121,7 @@ def should_compact(
     if directive_just_arrived:
         passed.append("directive_boundary")
     elif tools_since_directive >= MIN_TOOLS_SINCE_LAST_DIRECTIVE_WHEN_IDLE:
-        passed.append(
-            f"idle_stretch>={MIN_TOOLS_SINCE_LAST_DIRECTIVE_WHEN_IDLE}"
-        )
+        passed.append(f"idle_stretch>={MIN_TOOLS_SINCE_LAST_DIRECTIVE_WHEN_IDLE}")
     else:
         failed.append("no_phase_boundary")
 
@@ -148,10 +142,7 @@ def should_compact(
     }
 
     if recommend:
-        reason = (
-            f"phase boundary detected, {tools_since_compact} tools since "
-            f"last compact"
-        )
+        reason = f"phase boundary detected, {tools_since_compact} tools since last compact"
     else:
         reason = "; ".join(failed)
 

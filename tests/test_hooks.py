@@ -323,13 +323,12 @@ class TestHandlePreCompact:
         monkeypatch.setenv("PRISM_DISABLE_FRAME", "1")
 
         handle_session_start({"session_id": "nf_test"})
-        handle_post_tool_use(
-            {"session_id": "nf_test", "tool_name": "Read", "tool_output": "ok"}
-        )
+        handle_post_tool_use({"session_id": "nf_test", "tool_name": "Read", "tool_output": "ok"})
         result = handle_pre_compact({"session_id": "nf_test"})
         assert result == {}
 
         from prism.engine import read_events
+
         events = read_events("nf_test")
         e = events[-1]
         assert e["frame_disabled"] is True
@@ -344,6 +343,7 @@ class TestHandlePreCompact:
         monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
         # Force the random roll to always select baseline
         import prism.hooks as hooks_mod
+
         monkeypatch.setattr(hooks_mod, "_roll_baseline", lambda frac: True)
 
         handle_session_start({"session_id": "auto_baseline"})
@@ -354,6 +354,7 @@ class TestHandlePreCompact:
         assert result == {}
 
         from prism.engine import read_events
+
         e = read_events("auto_baseline")[-1]
         assert e["frame_disabled"] is True
         assert e["baseline_reason"] == "random_baseline"
@@ -373,6 +374,7 @@ class TestHandlePreCompact:
         handle_pre_compact({"session_id": "no_baseline"})
 
         from prism.engine import read_events
+
         e = read_events("no_baseline")[-1]
         assert e["frame_disabled"] is False
         assert e["baseline_reason"] == "none"
@@ -386,6 +388,7 @@ class TestHandlePreCompact:
         monkeypatch.setenv("PRISM_BASELINE_FRACTION", "not_a_number")
 
         from prism import hooks as hooks_mod
+
         assert hooks_mod._baseline_fraction() == hooks_mod.DEFAULT_BASELINE_FRACTION
 
 
@@ -451,16 +454,13 @@ class TestHandleUserPrompt:
         monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
         monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
         monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
-        monkeypatch.setattr(
-            "prism.phase_matcher._STATE_DIR", tmp_path / "phase_state"
-        )
+        monkeypatch.setattr("prism.phase_matcher._STATE_DIR", tmp_path / "phase_state")
 
     def test_records_user_prompt_event_with_classification(self, tmp_path, monkeypatch):
         self._setup_paths(tmp_path, monkeypatch)
-        handle_user_prompt(
-            {"session_id": "up_test", "userMessage": "implement the feature"}
-        )
+        handle_user_prompt({"session_id": "up_test", "userMessage": "implement the feature"})
         from prism.engine import read_events
+
         events = read_events("up_test")
         prompt_events = [e for e in events if e.get("event") == "user_prompt"]
         assert len(prompt_events) == 1
@@ -473,6 +473,7 @@ class TestHandleUserPrompt:
         result = handle_user_prompt({"session_id": "empty", "userMessage": ""})
         assert result == {}
         from prism.engine import read_events
+
         assert read_events("empty") == []
 
     def test_compaction_nudge_on_directive_after_many_tools(self, tmp_path, monkeypatch):
@@ -481,9 +482,7 @@ class TestHandleUserPrompt:
         # Mixed tool history → avoids the edit-burst guard
         seq = ["Read", "Bash", "Read", "Bash", "Grep"] * 5
         for tool in seq:
-            handle_post_tool_use(
-                {"session_id": "nudge", "tool_name": tool, "tool_output": "ok"}
-            )
+            handle_post_tool_use({"session_id": "nudge", "tool_name": tool, "tool_output": "ok"})
         result = handle_user_prompt(
             {"session_id": "nudge", "userMessage": "now implement the next feature"}
         )
@@ -497,9 +496,7 @@ class TestHandleUserPrompt:
             handle_post_tool_use(
                 {"session_id": "nonudge", "tool_name": "Read", "tool_output": "ok"}
             )
-        result = handle_user_prompt(
-            {"session_id": "nonudge", "userMessage": "yes"}
-        )
+        result = handle_user_prompt({"session_id": "nonudge", "userMessage": "yes"})
         # Continuation shouldn't trigger compaction nudge
         assert "systemMessage" not in result
 

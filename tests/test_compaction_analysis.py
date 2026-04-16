@@ -26,9 +26,15 @@ def _compact(frame: str = "x", injected: bool = True, disabled: bool = False) ->
 class TestAnalyzeBoundary:
     def test_basic_error_rates(self):
         events = [
-            _tu(error=False), _tu(error=False), _tu(error=True), _tu(error=False),
+            _tu(error=False),
+            _tu(error=False),
+            _tu(error=True),
+            _tu(error=False),
             _compact(),
-            _tu(error=True), _tu(error=True), _tu(error=False), _tu(error=False),
+            _tu(error=True),
+            _tu(error=True),
+            _tu(error=False),
+            _tu(error=False),
         ]
         m = ca.analyze_boundary("s1", events, boundary_idx=4, window=4)
         assert m.pre_tools == 4
@@ -41,9 +47,11 @@ class TestAnalyzeBoundary:
 
     def test_re_read_detection(self):
         events = [
-            _tu(file_path="/a.py"), _tu(file_path="/b.py"),
+            _tu(file_path="/a.py"),
+            _tu(file_path="/b.py"),
             _compact(),
-            _tu(file_path="/a.py"), _tu(file_path="/c.py"),
+            _tu(file_path="/a.py"),
+            _tu(file_path="/c.py"),
         ]
         m = ca.analyze_boundary("s", events, 2, window=5)
         assert set(m.files_pre) == {"/a.py", "/b.py"}
@@ -82,12 +90,21 @@ class TestAnalyzeBoundary:
 class TestAggregate:
     def _boundary(self, injected: bool, post_err: float, post_n: int = 10) -> ca.BoundaryMetrics:
         return ca.BoundaryMetrics(
-            session_id="s", boundary_idx=0, tools_so_far=10,
-            frame_injected=injected, frame_disabled=not injected,
-            frame_length=100, pattern_before="RWX", mode_before="implementing",
-            pre_tools=10, post_tools=post_n,
-            pre_errors=1, post_errors=int(post_err * post_n),
-            files_pre=[], files_post=[], re_read_count=0,
+            session_id="s",
+            boundary_idx=0,
+            tools_so_far=10,
+            frame_injected=injected,
+            frame_disabled=not injected,
+            frame_length=100,
+            pattern_before="RWX",
+            mode_before="implementing",
+            pre_tools=10,
+            post_tools=post_n,
+            pre_errors=1,
+            post_errors=int(post_err * post_n),
+            files_pre=[],
+            files_post=[],
+            re_read_count=0,
         )
 
     def test_splits_by_frame_injected(self):
@@ -100,7 +117,9 @@ class TestAggregate:
         agg = ca.aggregate(bounds)
         assert agg["with_frame"]["n"] == 2
         assert agg["without_frame"]["n"] == 2
-        assert agg["with_frame"]["mean_post_error_rate"] < agg["without_frame"]["mean_post_error_rate"]
+        with_mean = agg["with_frame"]["mean_post_error_rate"]
+        without_mean = agg["without_frame"]["mean_post_error_rate"]
+        assert with_mean < without_mean
 
     def test_drops_boundaries_with_short_post_window(self):
         bounds = [
@@ -124,6 +143,7 @@ class TestAnalyzeSession:
         monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
 
         from prism import engine
+
         engine.append_event("test", {"event": "tool_use", "tool": "Read", "error": False})
         engine.append_event("test", _compact())
         engine.append_event("test", {"event": "tool_use", "tool": "Read", "error": True})

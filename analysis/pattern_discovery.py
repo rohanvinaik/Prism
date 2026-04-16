@@ -20,10 +20,10 @@ import argparse
 import json
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 # Prism sources — reuse session discovery, not parsing (it discards text)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -248,16 +248,22 @@ def iter_exchanges(path: Path, project: str) -> Iterator[Exchange]:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         name = block.get("name", "unknown")
                         cur_tools.append(name)
-                        cur_tool_details.append(ToolUse(
-                            name=name,
-                            summary=summarize_tool_input(name, block.get("input", {})),
-                            timestamp=ts,
-                        ))
+                        cur_tool_details.append(
+                            ToolUse(
+                                name=name,
+                                summary=summarize_tool_input(name, block.get("input", {})),
+                                timestamp=ts,
+                            )
+                        )
             # Accumulate token usage
             usage = obj.get("message", {}).get("usage", {})
             if usage:
-                for key in ("input_tokens", "output_tokens",
-                            "cache_creation_input_tokens", "cache_read_input_tokens"):
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "cache_creation_input_tokens",
+                    "cache_read_input_tokens",
+                ):
                     cur_usage[key] = cur_usage.get(key, 0) + usage.get(key, 0)
 
     # Flush final exchange
@@ -348,15 +354,21 @@ def parse_subagent(path: Path, parent_session_id: str, project: str) -> Subagent
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         name = block.get("name", "unknown")
                         tools.append(name)
-                        tool_details.append(ToolUse(
-                            name=name,
-                            summary=summarize_tool_input(name, block.get("input", {})),
-                            timestamp=ts,
-                        ))
+                        tool_details.append(
+                            ToolUse(
+                                name=name,
+                                summary=summarize_tool_input(name, block.get("input", {})),
+                                timestamp=ts,
+                            )
+                        )
             msg_usage = obj.get("message", {}).get("usage", {})
             if msg_usage:
-                for key in ("input_tokens", "output_tokens",
-                            "cache_creation_input_tokens", "cache_read_input_tokens"):
+                for key in (
+                    "input_tokens",
+                    "output_tokens",
+                    "cache_creation_input_tokens",
+                    "cache_read_input_tokens",
+                ):
                     usage[key] = usage.get(key, 0) + msg_usage.get(key, 0)
 
     if not tools and not assistant_parts:
@@ -408,14 +420,16 @@ def extract_corpus(
                         if sub:
                             subagents.append(sub)
 
-            records.append(SessionRecord(
-                session_id=jsonl_file.stem,
-                project=proj,
-                exchanges=exchanges,
-                subagents=subagents,
-                timestamp_start=exchanges[0].timestamp,
-                timestamp_end=exchanges[-1].timestamp,
-            ))
+            records.append(
+                SessionRecord(
+                    session_id=jsonl_file.stem,
+                    project=proj,
+                    exchanges=exchanges,
+                    subagents=subagents,
+                    timestamp_start=exchanges[0].timestamp,
+                    timestamp_end=exchanges[-1].timestamp,
+                )
+            )
 
     return records
 
@@ -485,23 +499,95 @@ def classify_mode(tool_sequence: list[str]) -> str:
 
 
 # Common imperative verbs in Claude Code user prompts
-_VERBS = frozenset({
-    "fix", "add", "implement", "update", "refactor", "review", "check",
-    "show", "find", "debug", "test", "run", "create", "move", "rename",
-    "delete", "remove", "change", "make", "build", "write", "read",
-    "look", "explain", "help", "try", "use", "install", "deploy",
-    "merge", "push", "pull", "commit", "revert", "clean", "format",
-    "lint", "optimize", "improve", "search", "replace", "set", "get",
-    "list", "print", "log", "trace", "profile", "analyze", "audit",
-    "generate", "convert", "extract", "parse", "validate", "verify",
-})
+_VERBS = frozenset(
+    {
+        "fix",
+        "add",
+        "implement",
+        "update",
+        "refactor",
+        "review",
+        "check",
+        "show",
+        "find",
+        "debug",
+        "test",
+        "run",
+        "create",
+        "move",
+        "rename",
+        "delete",
+        "remove",
+        "change",
+        "make",
+        "build",
+        "write",
+        "read",
+        "look",
+        "explain",
+        "help",
+        "try",
+        "use",
+        "install",
+        "deploy",
+        "merge",
+        "push",
+        "pull",
+        "commit",
+        "revert",
+        "clean",
+        "format",
+        "lint",
+        "optimize",
+        "improve",
+        "search",
+        "replace",
+        "set",
+        "get",
+        "list",
+        "print",
+        "log",
+        "trace",
+        "profile",
+        "analyze",
+        "audit",
+        "generate",
+        "convert",
+        "extract",
+        "parse",
+        "validate",
+        "verify",
+    }
+)
 
 # Words to skip when looking for the leading verb
-_SKIP_WORDS = frozenset({
-    "please", "can", "could", "would", "should", "let's", "lets",
-    "now", "ok", "okay", "yes", "yeah", "sure", "go", "hey",
-    "i", "we", "you", "the", "a", "an", "this", "that",
-})
+_SKIP_WORDS = frozenset(
+    {
+        "please",
+        "can",
+        "could",
+        "would",
+        "should",
+        "let's",
+        "lets",
+        "now",
+        "ok",
+        "okay",
+        "yes",
+        "yeah",
+        "sure",
+        "go",
+        "hey",
+        "i",
+        "we",
+        "you",
+        "the",
+        "a",
+        "an",
+        "this",
+        "that",
+    }
+)
 
 
 def _extract_verb(text: str) -> str | None:
@@ -539,12 +625,14 @@ def detect_phase_transitions(session: SessionRecord) -> list[dict]:
     for i, ex in enumerate(session.exchanges[1:], 1):
         mode = classify_mode(ex.tool_sequence)
         if mode != prev_mode:
-            transitions.append({
-                "index": i,
-                "from": prev_mode,
-                "to": mode,
-                "trigger_text": ex.user_text[:120],
-            })
+            transitions.append(
+                {
+                    "index": i,
+                    "from": prev_mode,
+                    "to": mode,
+                    "trigger_text": ex.user_text[:120],
+                }
+            )
         prev_mode = mode
 
     return transitions
@@ -556,37 +644,101 @@ def detect_phase_transitions(session: SessionRecord) -> list[dict]:
 
 # Intent keyword clusters — detect what the user is TRYING to do
 _INTENT_KEYWORDS: dict[str, frozenset[str]] = {
-    "fix_bug": frozenset({
-        "fix", "bug", "broken", "crash", "doesn't work", "not working",
-        "regression",
-    }),
-    "build_feature": frozenset({
-        "add", "implement", "create", "new feature", "build", "support",
-        "enable", "introduce", "extend",
-    }),
-    "refactor": frozenset({
-        "refactor", "clean up", "reorganize", "rename", "move", "split",
-        "extract", "simplify", "restructure", "consolidate",
-    }),
-    "debug": frozenset({
-        "debug", "trace", "why", "investigate", "diagnose", "figure out",
-        "what's happening", "root cause",
-    }),
-    "setup_config": frozenset({
-        "install", "setup", "configure", "deploy", "init", "bootstrap",
-        "dependency", "config",
-    }),
-    "explore_review": frozenset({
-        "review", "audit", "explain", "understand", "how does",
-        "what does", "show me", "walk me through",
-    }),
-    "test": frozenset({
-        "test", "coverage", "mutation", "spec", "pytest", "verify",
-    }),
-    "git_ops": frozenset({
-        "commit", "push", "merge", "branch", "rebase", "pr",
-        "pull request",
-    }),
+    "fix_bug": frozenset(
+        {
+            "fix",
+            "bug",
+            "broken",
+            "crash",
+            "doesn't work",
+            "not working",
+            "regression",
+        }
+    ),
+    "build_feature": frozenset(
+        {
+            "add",
+            "implement",
+            "create",
+            "new feature",
+            "build",
+            "support",
+            "enable",
+            "introduce",
+            "extend",
+        }
+    ),
+    "refactor": frozenset(
+        {
+            "refactor",
+            "clean up",
+            "reorganize",
+            "rename",
+            "move",
+            "split",
+            "extract",
+            "simplify",
+            "restructure",
+            "consolidate",
+        }
+    ),
+    "debug": frozenset(
+        {
+            "debug",
+            "trace",
+            "why",
+            "investigate",
+            "diagnose",
+            "figure out",
+            "what's happening",
+            "root cause",
+        }
+    ),
+    "setup_config": frozenset(
+        {
+            "install",
+            "setup",
+            "configure",
+            "deploy",
+            "init",
+            "bootstrap",
+            "dependency",
+            "config",
+        }
+    ),
+    "explore_review": frozenset(
+        {
+            "review",
+            "audit",
+            "explain",
+            "understand",
+            "how does",
+            "what does",
+            "show me",
+            "walk me through",
+        }
+    ),
+    "test": frozenset(
+        {
+            "test",
+            "coverage",
+            "mutation",
+            "spec",
+            "pytest",
+            "verify",
+        }
+    ),
+    "git_ops": frozenset(
+        {
+            "commit",
+            "push",
+            "merge",
+            "branch",
+            "rebase",
+            "pr",
+            "pull request",
+        }
+    ),
 }
 
 
@@ -605,6 +757,7 @@ def _detect_intents(text: str) -> list[str]:
 @dataclass
 class WorkPhase:
     """A contiguous run of 1-10 exchanges forming a coherent work unit."""
+
     exchanges: list[Exchange]
     mode: str  # Dominant mode across exchanges
     tool_signature: str  # Compressed tool pattern, e.g. "Read×3→Edit×2→Bash"
@@ -657,8 +810,12 @@ def _abstract_tool_sequence(tools: list[str]) -> list[str]:
     ToolSearch, Task* → _ (meta, ignored)
     """
     mapping = {
-        "Read": "R", "Grep": "R", "Glob": "R",
-        "Edit": "W", "Write": "W", "NotebookEdit": "W",
+        "Read": "R",
+        "Grep": "R",
+        "Glob": "R",
+        "Edit": "W",
+        "Write": "W",
+        "NotebookEdit": "W",
         "Bash": "X",
         "Agent": "A",
     }
@@ -725,20 +882,22 @@ def extract_work_phases(session: SessionRecord) -> list[WorkPhase]:
                 if td.name in ("Read", "Edit", "Write") and "/" in td.summary:
                     files.add(td.summary)
 
-        phases.append(WorkPhase(
-            exchanges=current_phase[:],
-            mode=dominant,
-            tool_signature=_compress_tool_sequence(all_tools),
-            tool_sequence=all_tools,
-            intents=list(dict.fromkeys(intents)),  # Deduplicate, preserve order
-            user_texts=user_texts,
-            assistant_summary=asst_summary,
-            files_touched=sorted(files),
-            exchange_count=len(current_phase),
-            tool_count=len(all_tools),
-            session_id=session.session_id[:12],
-            project=session.project,
-        ))
+        phases.append(
+            WorkPhase(
+                exchanges=current_phase[:],
+                mode=dominant,
+                tool_signature=_compress_tool_sequence(all_tools),
+                tool_sequence=all_tools,
+                intents=list(dict.fromkeys(intents)),  # Deduplicate, preserve order
+                user_texts=user_texts,
+                assistant_summary=asst_summary,
+                files_touched=sorted(files),
+                exchange_count=len(current_phase),
+                tool_count=len(all_tools),
+                session_id=session.session_id[:12],
+                project=session.project,
+            )
+        )
 
     conv_streak = 0
     prev_mode = ""
@@ -840,22 +999,14 @@ def discover_phase_archetypes(
         archetype_stats[pattern] = {
             "count": count,
             "pct": round(count / max(len(all_phases), 1), 3),
-            "avg_exchanges": round(
-                sum(p.exchange_count for p in phases_in) / count, 1
-            ),
-            "avg_tools": round(
-                sum(p.tool_count for p in phases_in) / count, 1
-            ),
+            "avg_exchanges": round(sum(p.exchange_count for p in phases_in) / count, 1),
+            "avg_tools": round(sum(p.tool_count for p in phases_in) / count, 1),
             "dominant_mode": mode_agg.most_common(1)[0][0] if mode_agg else "?",
             "mode_distribution": dict(mode_agg.most_common()),
             "top_intents": dict(intent_agg.most_common(5)),
             "top_verbs": dict(verb_agg.most_common(5)),
-            "example_signatures": [
-                sig for sig, _ in sig_counter.most_common(3)
-            ],
-            "avg_files": round(
-                sum(len(p.files_touched) for p in phases_in) / count, 1
-            ),
+            "example_signatures": [sig for sig, _ in sig_counter.most_common(3)],
+            "avg_files": round(sum(len(p.files_touched) for p in phases_in) / count, 1),
         }
 
     return all_phases, archetype_stats
@@ -891,17 +1042,17 @@ def _mode_stats(exchanges: list[Exchange]) -> list[dict]:
             for i in range(len(seq) - 1):
                 bigram_counts[(seq[i], seq[i + 1])] += 1
 
-        stats.append({
-            "name": mode,
-            "count": len(exs),
-            "pct": round(len(exs) / max(total, 1), 3),
-            "avg_tools_per_exchange": round(total_tools / max(len(exs), 1), 1),
-            "signature_tools": [t for t, _ in tool_counts.most_common(5)],
-            "common_verbs": [v for v, _ in verb_counts.most_common(5)],
-            "common_bigrams": [
-                list(bg) for bg, _ in bigram_counts.most_common(3)
-            ],
-        })
+        stats.append(
+            {
+                "name": mode,
+                "count": len(exs),
+                "pct": round(len(exs) / max(total, 1), 3),
+                "avg_tools_per_exchange": round(total_tools / max(len(exs), 1), 1),
+                "signature_tools": [t for t, _ in tool_counts.most_common(5)],
+                "common_verbs": [v for v, _ in verb_counts.most_common(5)],
+                "common_bigrams": [list(bg) for bg, _ in bigram_counts.most_common(3)],
+            }
+        )
     return stats
 
 
@@ -946,9 +1097,7 @@ def build_pattern_catalog(
     for t in all_transitions:
         trans_counter[(t["from"], t["to"])] += 1
 
-    sessions_with_trans = sum(
-        1 for s in corpus if detect_phase_transitions(s)
-    )
+    sessions_with_trans = sum(1 for s in corpus if detect_phase_transitions(s))
 
     total_exchanges = len(exchanges)
     compact_count = sum(1 for s in all_subagents if s.agent_type == "compact")
@@ -976,9 +1125,7 @@ def build_pattern_catalog(
                 {"from": f, "to": t, "count": c, "pct": round(c / max(len(all_transitions), 1), 3)}
                 for (f, t), c in trans_counter.most_common(15)
             ],
-            "avg_transitions_per_session": round(
-                len(all_transitions) / max(len(corpus), 1), 1
-            ),
+            "avg_transitions_per_session": round(len(all_transitions) / max(len(corpus), 1), 1),
             "sessions_with_transitions": sessions_with_trans,
         },
     }
@@ -1005,9 +1152,7 @@ def build_pattern_catalog(
     for n, grams in ngrams.items():
         ngram_total = sum(c for _, c in grams) if grams else 1
         if n == 1:
-            catalog["tool_patterns"]["unigrams"] = {
-                g[0]: c for g, c in grams
-            }
+            catalog["tool_patterns"]["unigrams"] = {g[0]: c for g, c in grams}
         else:
             catalog["tool_patterns"][label.get(n, f"{n}-grams")] = [
                 {
@@ -1025,27 +1170,31 @@ def print_summary(catalog: dict) -> None:
     """Print human-readable summary to stdout."""
     meta = catalog["_meta"]
     corp = meta["corpus"]
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Session Pattern Discovery — {meta['generated'][:10]}")
-    print(f"{'='*60}")
-    print(f"\nCorpus: {corp['sessions']} sessions, {corp['exchanges']} exchanges, "
-          f"{corp['projects']} projects")
+    print(f"{'=' * 60}")
+    print(
+        f"\nCorpus: {corp['sessions']} sessions, {corp['exchanges']} exchanges, "
+        f"{corp['projects']} projects"
+    )
     if corp.get("subagents"):
-        print(f"Subagents: {corp['subagents']} ({corp['subagents_compact']} compact, "
-              f"{corp['subagents_spawned']} spawned)")
+        print(
+            f"Subagents: {corp['subagents']} ({corp['subagents_compact']} compact, "
+            f"{corp['subagents_spawned']} spawned)"
+        )
     print(f"Date range: {corp['date_range'][0]} → {corp['date_range'][1]}")
 
     # Tool unigrams
     unigrams = catalog["tool_patterns"].get("unigrams", {})
     if unigrams:
-        print(f"\n--- Tool Frequency (top 15) ---")
+        print("\n--- Tool Frequency (top 15) ---")
         for tool, count in sorted(unigrams.items(), key=lambda x: -x[1])[:15]:
             print(f"  {tool:30s} {count:6d}")
 
     # Top bigrams
     bigrams = catalog["tool_patterns"].get("bigrams", [])
     if bigrams:
-        print(f"\n--- Tool Bigrams (top 15) ---")
+        print("\n--- Tool Bigrams (top 15) ---")
         for bg in bigrams[:15]:
             seq = " → ".join(bg["seq"])
             print(f"  {seq:40s} {bg['count']:6d}  ({bg['pct']:.1%})")
@@ -1053,7 +1202,7 @@ def print_summary(catalog: dict) -> None:
     # Top trigrams
     trigrams = catalog["tool_patterns"].get("trigrams", [])
     if trigrams:
-        print(f"\n--- Tool Trigrams (top 10) ---")
+        print("\n--- Tool Trigrams (top 10) ---")
         for tg in trigrams[:10]:
             seq = " → ".join(tg["seq"])
             print(f"  {seq:50s} {tg['count']:6d}  ({tg['pct']:.1%})")
@@ -1061,30 +1210,37 @@ def print_summary(catalog: dict) -> None:
     # Mode distribution
     modes = catalog.get("workflow_modes", [])
     if modes:
-        print(f"\n--- Workflow Modes ---")
+        print("\n--- Workflow Modes ---")
         for m in modes:
             tools = ", ".join(m["signature_tools"][:3])
             verbs = ", ".join(m["common_verbs"][:3])
-            print(f"  {m['name']:15s} {m['count']:5d} ({m['pct']:.0%})"
-                  f"  avg_tools={m['avg_tools_per_exchange']:.1f}"
-                  f"  sig=[{tools}]  verbs=[{verbs}]")
+            print(
+                f"  {m['name']:15s} {m['count']:5d} ({m['pct']:.0%})"
+                f"  avg_tools={m['avg_tools_per_exchange']:.1f}"
+                f"  sig=[{tools}]  verbs=[{verbs}]"
+            )
 
     # Verb-intent map
     vim = catalog.get("verb_intent_map", {})
     if vim:
-        print(f"\n--- Verb → Mode (top 15, ≥2 occurrences) ---")
+        print("\n--- Verb → Mode (top 15, ≥2 occurrences) ---")
         sorted_verbs = sorted(vim.items(), key=lambda x: -x[1]["count"])[:15]
         for verb, info in sorted_verbs:
-            print(f"  {verb:15s} → {info['primary_mode']:15s}"
-                  f"  conf={info['confidence']:.0%}  n={info['count']}")
+            print(
+                f"  {verb:15s} → {info['primary_mode']:15s}"
+                f"  conf={info['confidence']:.0%}  n={info['count']}"
+            )
 
     # Subagent stats
     subs = catalog.get("subagents", {})
     if subs:
-        print(f"\n--- Subagent Behavior ---")
+        print("\n--- Subagent Behavior ---")
         print(f"  Total: {subs['total']} ({subs['compact']} compact, {subs['spawned']} spawned)")
         print(f"  Avg tools/subagent: {subs['avg_tools']}")
-        modes_str = ", ".join(f"{m}({c})" for m, c in sorted(subs["mode_distribution"].items(), key=lambda x: -x[1])[:5])
+        modes_str = ", ".join(
+            f"{m}({c})"
+            for m, c in sorted(subs["mode_distribution"].items(), key=lambda x: -x[1])[:5]
+        )
         print(f"  Modes: {modes_str}")
         top_tools_str = ", ".join(f"{t}({c})" for t, c in list(subs["top_tools"].items())[:5])
         print(f"  Top tools: {top_tools_str}")
@@ -1093,7 +1249,7 @@ def print_summary(catalog: dict) -> None:
     trans = catalog.get("phase_transitions", {})
     common = trans.get("common", [])
     if common:
-        print(f"\n--- Phase Transitions (top 10) ---")
+        print("\n--- Phase Transitions (top 10) ---")
         print(f"  Avg transitions/session: {trans.get('avg_transitions_per_session', 0)}")
         print(f"  Sessions with transitions: {trans.get('sessions_with_transitions', 0)}")
         for t in common[:10]:
@@ -1108,15 +1264,17 @@ def print_summary(catalog: dict) -> None:
             verbs = ", ".join(stats["top_verbs"].keys()) or "—"
             sigs = stats.get("example_signatures", [])
             sig_str = sigs[0][:60] if sigs else "—"
-            print(f"\n  [{pattern}]  n={stats['count']} ({stats['pct']:.0%})"
-                  f"  mode={stats['dominant_mode']}"
-                  f"  avg_ex={stats['avg_exchanges']}"
-                  f"  avg_tools={stats['avg_tools']}"
-                  f"  files={stats['avg_files']}")
+            print(
+                f"\n  [{pattern}]  n={stats['count']} ({stats['pct']:.0%})"
+                f"  mode={stats['dominant_mode']}"
+                f"  avg_ex={stats['avg_exchanges']}"
+                f"  avg_tools={stats['avg_tools']}"
+                f"  files={stats['avg_files']}"
+            )
             print(f"    verbs=[{verbs}]  intents=[{intents}]")
             print(f"    example: {sig_str}")
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -1126,14 +1284,18 @@ def print_summary(catalog: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Session pattern discovery")
-    parser.add_argument("--since", type=int, default=None,
-                        help="Only analyze sessions from the last N days")
-    parser.add_argument("--project", type=str, default=None,
-                        help="Filter to project name substring")
-    parser.add_argument("--output", type=str, default="analysis/patterns.json",
-                        help="Output path for patterns.json")
-    parser.add_argument("--include-subagents", action="store_true",
-                        help="Include subagent session files")
+    parser.add_argument(
+        "--since", type=int, default=None, help="Only analyze sessions from the last N days"
+    )
+    parser.add_argument(
+        "--project", type=str, default=None, help="Filter to project name substring"
+    )
+    parser.add_argument(
+        "--output", type=str, default="analysis/patterns.json", help="Output path for patterns.json"
+    )
+    parser.add_argument(
+        "--include-subagents", action="store_true", help="Include subagent session files"
+    )
     args = parser.parse_args()
 
     since = None
@@ -1190,8 +1352,14 @@ def main() -> None:
 
     # Build catalog
     catalog = build_pattern_catalog(
-        corpus, all_exchanges, ngrams, modes, verb_map, all_transitions,
-        all_subagents, subagent_modes,
+        corpus,
+        all_exchanges,
+        ngrams,
+        modes,
+        verb_map,
+        all_transitions,
+        all_subagents,
+        subagent_modes,
     )
     catalog["phase_archetypes"] = archetype_stats
 

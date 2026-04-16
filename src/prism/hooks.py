@@ -52,7 +52,7 @@ def _summarize_tool_input(tool_name: str, tool_input: Any) -> str:
     if not isinstance(tool_input, dict):
         return str(tool_input)[:60] if tool_input else ""
     if tool_name in ("Read", "Edit", "Write", "NotebookEdit"):
-        return tool_input.get("file_path", tool_input.get("path", ""))
+        return str(tool_input.get("file_path") or tool_input.get("path") or "")
     if tool_name == "Bash":
         return tool_input.get("command", "")[:80]
     if tool_name in ("Grep", "Glob"):
@@ -231,6 +231,7 @@ def _baseline_fraction() -> float:
 def _roll_baseline(fraction: float) -> bool:
     """Return True if this compaction should be a baseline (no frame)."""
     import random
+
     return random.random() < fraction
 
 
@@ -282,11 +283,7 @@ def handle_pre_compact(data: dict) -> dict:
     )
 
     if frame_injected:
-        return {
-            "additionalContext": (
-                f"[Prism] Compact focus: {frame}"
-            )
-        }
+        return {"additionalContext": (f"[Prism] Compact focus: {frame}")}
     return {}
 
 

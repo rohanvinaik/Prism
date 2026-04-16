@@ -92,9 +92,7 @@ def _find_compaction_indices(events: list[dict]) -> list[int]:
     return [i for i, e in enumerate(events) if e.get("event") == "pre_compact"]
 
 
-def _window_tool_events(
-    events: list[dict], start: int, end: int
-) -> list[dict]:
+def _window_tool_events(events: list[dict], start: int, end: int) -> list[dict]:
     """Slice events[start:end] and keep only tool_use entries."""
     return [e for e in events[start:end] if e.get("event") == "tool_use"]
 
@@ -224,6 +222,7 @@ def aggregate_recent(days: int = 7, window: int = DEFAULT_WINDOW) -> dict:
     cutoff_ts = None
     if days > 0:
         import time
+
         cutoff_ts = time.time() - days * 86400
 
     for path in engine.SESSIONS_DIR.glob("*.jsonl"):
@@ -233,9 +232,7 @@ def aggregate_recent(days: int = 7, window: int = DEFAULT_WINDOW) -> dict:
         all_boundaries.extend(analyze_session(sid, window=window))
 
     result = aggregate(all_boundaries)
-    result["sessions_scanned"] = sum(
-        1 for _ in engine.SESSIONS_DIR.glob("*.jsonl")
-    )
+    result["sessions_scanned"] = sum(1 for _ in engine.SESSIONS_DIR.glob("*.jsonl"))
     result["boundaries"] = [b.to_dict() for b in all_boundaries]
     return result
 
@@ -270,31 +267,19 @@ def analyze(days: int = 30, window: int = DEFAULT_WINDOW) -> str:
 
     # Interpretation
     if w.get("n", 0) >= 3 and wo.get("n", 0) >= 3:
-        err_improvement = (
-            wo.get("mean_post_error_rate", 0) - w.get("mean_post_error_rate", 0)
-        )
-        reread_improvement = (
-            wo.get("mean_re_read_rate", 0) - w.get("mean_re_read_rate", 0)
-        )
+        err_improvement = wo.get("mean_post_error_rate", 0) - w.get("mean_post_error_rate", 0)
+        reread_improvement = wo.get("mean_re_read_rate", 0) - w.get("mean_re_read_rate", 0)
         lines.append("## Signal")
         if err_improvement > 0.02:
-            lines.append(
-                f"- Frame **reduces** post-compact error rate by {err_improvement:.2%}"
-            )
+            lines.append(f"- Frame **reduces** post-compact error rate by {err_improvement:.2%}")
         elif err_improvement < -0.02:
-            lines.append(
-                f"- Frame **increases** post-compact error rate by {-err_improvement:.2%}"
-            )
+            lines.append(f"- Frame **increases** post-compact error rate by {-err_improvement:.2%}")
         else:
             lines.append("- No detectable effect on error rate")
         if reread_improvement > 0.05:
-            lines.append(
-                f"- Frame **reduces** file re-reads by {reread_improvement:.2%}"
-            )
+            lines.append(f"- Frame **reduces** file re-reads by {reread_improvement:.2%}")
         elif reread_improvement < -0.05:
-            lines.append(
-                f"- Frame **increases** file re-reads by {-reread_improvement:.2%}"
-            )
+            lines.append(f"- Frame **increases** file re-reads by {-reread_improvement:.2%}")
     else:
         lines.append("## Signal")
         lines.append(
@@ -306,7 +291,4 @@ def analyze(days: int = 30, window: int = DEFAULT_WINDOW) -> str:
     summary = "\n".join(lines)
 
     aid = engine.save_snapshot("compaction_analysis", summary, agg)
-    return (
-        summary
-        + f"\n\n_Details: prism_details(\"{aid}\", section=\"boundaries\")_"
-    )
+    return summary + f'\n\n_Details: prism_details("{aid}", section="boundaries")_'

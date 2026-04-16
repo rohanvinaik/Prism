@@ -4,6 +4,20 @@
 pipeline_critical_paths:
   - "src/prism/sources.py"
 
+# Targeted exemptions — each must name a specific file + code with rationale.
+# Do NOT use this to downgrade severity globally (see CLAUDE.md debt policy).
+exemptions:
+  STRUCT003:
+    files:
+      - "src/prism/compaction_analysis.py"  # imported in server.py L14 (grouped)
+      - "src/prism/compaction_trigger.py"   # imported in hooks.py L17 (grouped)
+      - "src/prism/phase_matcher.py"        # imported in hooks.py L17 (grouped)
+    rationale: >
+      False positive — the scanner does not detect intra-package multi-line
+      grouped imports (e.g., `from . import (a, b, c)`). Verified via grep
+      that all three modules are imported and actively used. Ticket: none
+      (LintGate scanner limitation, not project debt).
+
 controlplane:
   enabled: true
   severity_weighted_coherence: true

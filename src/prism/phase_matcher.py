@@ -63,17 +63,28 @@ def _get_phase_archetypes() -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 _TOOL_TO_SYMBOL = {
-    "Read": "R", "Grep": "R", "Glob": "R",
-    "Edit": "W", "Write": "W", "NotebookEdit": "W",
+    "Read": "R",
+    "Grep": "R",
+    "Glob": "R",
+    "Edit": "W",
+    "Write": "W",
+    "NotebookEdit": "W",
     "Bash": "X",
     "Agent": "A",
 }
 
 # Meta-tools that don't contribute to phase patterns
-_SKIP_TOOLS = frozenset({
-    "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet",
-    "TaskList", "TaskOutput", "TaskStop",
-})
+_SKIP_TOOLS = frozenset(
+    {
+        "ToolSearch",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskGet",
+        "TaskList",
+        "TaskOutput",
+        "TaskStop",
+    }
+)
 
 
 def _tool_to_symbol(tool_name: str) -> str | None:
@@ -125,6 +136,7 @@ _STATE_DIR = engine.PRISM_DIR / "phase_state"
 @dataclass
 class PhaseState:
     """Sliding window of recent tool calls for phase detection."""
+
     tools: list[str] = field(default_factory=list)  # Raw tool names
     symbols: list[str] = field(default_factory=list)  # Abstract symbols
     tool_inputs: list[str] = field(default_factory=list)  # Summarized inputs
@@ -172,9 +184,9 @@ def _save_state(session_id: str, state: PhaseState) -> None:
     """Persist session phase state to disk."""
     _STATE_DIR.mkdir(parents=True, exist_ok=True)
     data = {
-        "tools": state.tools[-state.WINDOW_SIZE:],
-        "symbols": state.symbols[-state.WINDOW_SIZE:],
-        "tool_inputs": state.tool_inputs[-state.WINDOW_SIZE:],
+        "tools": state.tools[-state.WINDOW_SIZE :],
+        "symbols": state.symbols[-state.WINDOW_SIZE :],
+        "tool_inputs": state.tool_inputs[-state.WINDOW_SIZE :],
         "user_text": state.user_text,
         "user_text_class": state.user_text_class,
         "user_text_confidence": state.user_text_confidence,
@@ -183,9 +195,7 @@ def _save_state(session_id: str, state: PhaseState) -> None:
         "tool_count": state.tool_count,
         "tools_at_last_directive": state.tools_at_last_directive,
     }
-    _state_path(session_id).write_text(
-        json.dumps(data, separators=(",", ":"), default=str)
-    )
+    _state_path(session_id).write_text(json.dumps(data, separators=(",", ":"), default=str))
 
 
 # ---------------------------------------------------------------------------
@@ -242,9 +252,9 @@ def record_tool(session_id: str, tool_name: str, tool_input_summary: str) -> str
 
     # Trim window
     if len(state.tools) > state.WINDOW_SIZE:
-        state.tools = state.tools[-state.WINDOW_SIZE:]
-        state.symbols = state.symbols[-state.WINDOW_SIZE:]
-        state.tool_inputs = state.tool_inputs[-state.WINDOW_SIZE:]
+        state.tools = state.tools[-state.WINDOW_SIZE :]
+        state.symbols = state.symbols[-state.WINDOW_SIZE :]
+        state.tool_inputs = state.tool_inputs[-state.WINDOW_SIZE :]
 
     # Match
     pattern, match = _match_pattern(state.symbols)
@@ -310,7 +320,7 @@ def build_narrative_frame(session_id: str) -> str:
         for sep in (".", "\n", "!"):
             idx = text.find(sep)
             if 10 < idx < 120:
-                text = text[:idx + 1]
+                text = text[: idx + 1]
                 break
         else:
             text = text[:120]

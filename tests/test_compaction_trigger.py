@@ -13,15 +13,14 @@ def tmp_state(tmp_path, monkeypatch):
     monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
     monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
     monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
-    monkeypatch.setattr(
-        "prism.phase_matcher._STATE_DIR", tmp_path / "phase_state"
-    )
+    monkeypatch.setattr("prism.phase_matcher._STATE_DIR", tmp_path / "phase_state")
     return tmp_path
 
 
 def _populate(events: list[dict], session_id: str):
     """Append events via engine to the session."""
     from prism import engine
+
     for e in events:
         engine.append_event(session_id, e)
 
@@ -107,6 +106,10 @@ class TestRecommendationSerialization:
         rec = ct.should_compact("sid", directive_just_arrived=True)
         d = rec.to_dict()
         assert set(d.keys()) == {
-            "recommend", "reason", "confidence",
-            "conditions_passed", "conditions_failed", "metrics"
+            "recommend",
+            "reason",
+            "confidence",
+            "conditions_passed",
+            "conditions_failed",
+            "metrics",
         }
