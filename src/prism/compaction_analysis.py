@@ -299,7 +299,8 @@ def analyze(days: int = 30, window: int = DEFAULT_WINDOW) -> str:
         lines.append("## Signal")
         lines.append(
             "- Not enough data yet (need >=3 compactions in each group). "
-            "Run some sessions with PRISM_DISABLE_FRAME=1 to build the baseline."
+            "Auto-baseline skips the frame on ~20% of compactions; "
+            "let more accumulate or set PRISM_BASELINE_FRACTION higher."
         )
 
     summary = "\n".join(lines)

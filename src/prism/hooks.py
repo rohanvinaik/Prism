@@ -208,12 +208,39 @@ def handle_session_end(data: dict) -> dict:
     return handle_stop(data)
 
 
+# Fraction of compactions that skip frame injection, to build an automatic
+# A/B baseline cohort. Default 20% — enough samples to detect signal within
+# ~25-30 organic compactions while keeping the frame on 4 of every 5.
+# Override via PRISM_BASELINE_FRACTION (0.0 = always inject, 1.0 = never).
+DEFAULT_BASELINE_FRACTION = 0.2
+
+
+def _baseline_fraction() -> float:
+    if os.environ.get("PRISM_DISABLE_FRAME") == "1":
+        return 1.0
+    raw = os.environ.get("PRISM_BASELINE_FRACTION")
+    if raw is None:
+        return DEFAULT_BASELINE_FRACTION
+    try:
+        v = float(raw)
+        return max(0.0, min(1.0, v))
+    except ValueError:
+        return DEFAULT_BASELINE_FRACTION
+
+
+def _roll_baseline(fraction: float) -> bool:
+    """Return True if this compaction should be a baseline (no frame)."""
+    import random
+    return random.random() < fraction
+
+
 def handle_pre_compact(data: dict) -> dict:
     """Record compaction boundary. Inject narrative focus frame.
 
-    Honors PRISM_DISABLE_FRAME=1 to skip injection (for A/B baseline
-    measurement). The computed frame is still recorded in the event so
-    the analyzer can observe what *would* have been injected.
+    A/B split happens automatically: ~20% of compactions are baselines
+    (no frame injected) by default, tunable via PRISM_BASELINE_FRACTION.
+    The computed frame is always recorded in the event so the analyzer
+    can observe what *would* have been injected.
     """
     sid = _session_id(data)
     events = engine.read_events(sid)
@@ -221,7 +248,22 @@ def handle_pre_compact(data: dict) -> dict:
 
     frame = phase_matcher.build_narrative_frame(sid)
     phase_summary = phase_matcher.get_phase_summary(sid)
-    disabled = os.environ.get("PRISM_DISABLE_FRAME") == "1"
+
+    fraction = _baseline_fraction()
+    if fraction >= 1.0:
+        baseline_reason = "env_disabled"
+        is_baseline = True
+    elif fraction <= 0.0:
+        baseline_reason = "none"
+        is_baseline = False
+    elif _roll_baseline(fraction):
+        baseline_reason = "random_baseline"
+        is_baseline = True
+    else:
+        baseline_reason = "none"
+        is_baseline = False
+
+    frame_injected = bool(frame) and not is_baseline
 
     engine.append_event(
         sid,
@@ -230,14 +272,16 @@ def handle_pre_compact(data: dict) -> dict:
             "tools_so_far": tool_count,
             "frame": frame,
             "frame_length": len(frame),
-            "frame_injected": bool(frame) and not disabled,
-            "frame_disabled": disabled,
+            "frame_injected": frame_injected,
+            "frame_disabled": is_baseline,
+            "baseline_reason": baseline_reason,
+            "baseline_fraction": fraction,
             "pattern_before": phase_summary.get("current_pattern", ""),
             "mode_before": phase_summary.get("current_mode", ""),
         },
     )
 
-    if frame and not disabled:
+    if frame_injected:
         return {
             "additionalContext": (
                 f"[Prism] Compact focus: {frame}"

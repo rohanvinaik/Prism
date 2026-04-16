@@ -288,13 +288,14 @@ class TestHandlePreCompact:
         monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
         monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
         monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        # Force injection path (disable random baseline) for deterministic assertions
+        monkeypatch.setenv("PRISM_BASELINE_FRACTION", "0")
 
         handle_session_start({"session_id": "compact_test"})
         handle_post_tool_use(
             {"session_id": "compact_test", "tool_name": "Read", "tool_output": "ok"}
         )
         result = handle_pre_compact({"session_id": "compact_test"})
-        # May return additionalContext with narrative frame if phase matcher has state
         assert "error" not in result
         from prism.engine import read_events
 
@@ -308,7 +309,9 @@ class TestHandlePreCompact:
         assert "frame_length" in e
         assert "frame_injected" in e
         assert "frame_disabled" in e
+        assert "baseline_reason" in e
         assert e["frame_disabled"] is False
+        assert e["baseline_reason"] == "none"
         assert e["frame_length"] == len(e["frame"])
 
     def test_disable_frame_via_env(self, tmp_path, monkeypatch):
@@ -324,14 +327,66 @@ class TestHandlePreCompact:
             {"session_id": "nf_test", "tool_name": "Read", "tool_output": "ok"}
         )
         result = handle_pre_compact({"session_id": "nf_test"})
-        # Frame disabled — no additionalContext returned
         assert result == {}
 
         from prism.engine import read_events
         events = read_events("nf_test")
-        compact_events = [e for e in events if e["event"] == "pre_compact"]
-        assert compact_events[0]["frame_disabled"] is True
-        assert compact_events[0]["frame_injected"] is False
+        e = events[-1]
+        assert e["frame_disabled"] is True
+        assert e["frame_injected"] is False
+        assert e["baseline_reason"] == "env_disabled"
+
+    def test_auto_baseline_via_random_roll(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        # Force the random roll to always select baseline
+        import prism.hooks as hooks_mod
+        monkeypatch.setattr(hooks_mod, "_roll_baseline", lambda frac: True)
+
+        handle_session_start({"session_id": "auto_baseline"})
+        handle_post_tool_use(
+            {"session_id": "auto_baseline", "tool_name": "Read", "tool_output": "ok"}
+        )
+        result = handle_pre_compact({"session_id": "auto_baseline"})
+        assert result == {}
+
+        from prism.engine import read_events
+        e = read_events("auto_baseline")[-1]
+        assert e["frame_disabled"] is True
+        assert e["baseline_reason"] == "random_baseline"
+
+    def test_baseline_fraction_zero_always_injects(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        monkeypatch.setenv("PRISM_BASELINE_FRACTION", "0")
+
+        handle_session_start({"session_id": "no_baseline"})
+        handle_post_tool_use(
+            {"session_id": "no_baseline", "tool_name": "Read", "tool_output": "ok"}
+        )
+        handle_pre_compact({"session_id": "no_baseline"})
+
+        from prism.engine import read_events
+        e = read_events("no_baseline")[-1]
+        assert e["frame_disabled"] is False
+        assert e["baseline_reason"] == "none"
+
+    def test_baseline_fraction_invalid_falls_back(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        monkeypatch.setenv("PRISM_BASELINE_FRACTION", "not_a_number")
+
+        from prism import hooks as hooks_mod
+        assert hooks_mod._baseline_fraction() == hooks_mod.DEFAULT_BASELINE_FRACTION
 
 
 # =====================================================================
