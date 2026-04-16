@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import (
     behavior,
+    compaction_analysis,
     economics,
     engine,
     fix,
@@ -28,8 +29,9 @@ mcp = FastMCP(
     "Prism",
     instructions=(
         "Holographic Claude Code usage analytics. "
-        "11 tools: snapshot, economics, behavior, trajectory, forensics, "
-        "trends, details (drill-down), health, recommend, fix, pr_ready. "
+        "12 tools: snapshot, economics, behavior, trajectory, forensics, "
+        "trends, details (drill-down), health, recommend, fix, pr_ready, "
+        "compaction_analysis. "
         "Each tool returns a compact summary + snapshot_id. "
         "Call prism_details(id, section) to drill into full data on demand. "
         "IMPORTANT: Pass the current project name in the `project` param "
@@ -165,6 +167,22 @@ def prism_fix(project_path: str, dry_run: bool = True) -> str:
         dry_run: Preview fixes without applying (default True).
     """
     return fix.apply_fixes(project_path, dry_run)
+
+
+@mcp.tool()
+def prism_compaction_analysis(days: int = 30, window: int = 20) -> str:
+    """Validate the narrative-compaction frame: A/B post-compact metrics.
+
+    Splits all pre_compact events by whether a narrative frame was
+    injected (requires PRISM_DISABLE_FRAME=1 on baseline runs) and
+    compares mean post-compact error rate, re-read rate, and error-rate
+    delta. Needs >=3 compactions in each group before reporting signal.
+
+    Args:
+        days: How many days of sessions to scan (default 30).
+        window: Tool-event window size around each compaction (default 20).
+    """
+    return compaction_analysis.analyze(days, window)
 
 
 @mcp.tool()

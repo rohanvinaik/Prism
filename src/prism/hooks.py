@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from typing import Any
 
-from . import engine, phase_matcher
+from . import compaction_trigger, engine, phase_matcher
 
 # Anomaly thresholds
 CONSECUTIVE_ERROR_THRESHOLD = 3
@@ -76,6 +76,12 @@ def handle_post_tool_use(data: dict) -> dict:
         "tool": tool_name,
     }
 
+    # Phase matcher — record tool and input summary
+    tool_input = data.get("tool_input", {})
+    summary = _summarize_tool_input(tool_name, tool_input)
+    if tool_name in ("Read", "Edit", "Write", "NotebookEdit") and summary:
+        event["file_path"] = summary
+
     tool_output = data.get("tool_output", "")
     if isinstance(tool_output, str):
         event["output_bytes"] = len(tool_output.encode("utf-8", errors="replace"))
@@ -88,9 +94,6 @@ def handle_post_tool_use(data: dict) -> dict:
 
     engine.append_event(sid, event)
 
-    # Phase matcher — record tool and input summary
-    tool_input = data.get("tool_input", {})
-    summary = _summarize_tool_input(tool_name, tool_input)
     phase_matcher.record_tool(sid, tool_name, summary)
 
     # Anomaly: consecutive errors
@@ -206,22 +209,35 @@ def handle_session_end(data: dict) -> dict:
 
 
 def handle_pre_compact(data: dict) -> dict:
-    """Record compaction boundary. Inject narrative focus frame."""
+    """Record compaction boundary. Inject narrative focus frame.
+
+    Honors PRISM_DISABLE_FRAME=1 to skip injection (for A/B baseline
+    measurement). The computed frame is still recorded in the event so
+    the analyzer can observe what *would* have been injected.
+    """
     sid = _session_id(data)
     events = engine.read_events(sid)
     tool_count = sum(1 for e in events if e.get("event") == "tool_use")
+
+    frame = phase_matcher.build_narrative_frame(sid)
+    phase_summary = phase_matcher.get_phase_summary(sid)
+    disabled = os.environ.get("PRISM_DISABLE_FRAME") == "1"
 
     engine.append_event(
         sid,
         {
             "event": "pre_compact",
             "tools_so_far": tool_count,
+            "frame": frame,
+            "frame_length": len(frame),
+            "frame_injected": bool(frame) and not disabled,
+            "frame_disabled": disabled,
+            "pattern_before": phase_summary.get("current_pattern", ""),
+            "mode_before": phase_summary.get("current_mode", ""),
         },
     )
 
-    # Build narrative frame for compact focus
-    frame = phase_matcher.build_narrative_frame(sid)
-    if frame:
+    if frame and not disabled:
         return {
             "additionalContext": (
                 f"[Prism] Compact focus: {frame}"
@@ -231,14 +247,39 @@ def handle_pre_compact(data: dict) -> dict:
 
 
 def handle_user_prompt(data: dict) -> dict:
-    """Capture user prompt text for narrative frame building. Silent."""
+    """Capture user prompt text + classification. Silent."""
     sid = _session_id(data)
     # UserPromptSubmit delivers text in userMessage or message
     text = data.get("userMessage", "") or data.get("message", "")
     if isinstance(text, dict):
         text = text.get("content", "")
-    if isinstance(text, str) and text.strip():
-        phase_matcher.record_user_text(sid, text.strip())
+    if not isinstance(text, str) or not text.strip():
+        return {}
+
+    stripped = text.strip()
+    classification = phase_matcher.record_user_text(sid, stripped)
+    label = classification.get("label", "")
+    confidence = classification.get("confidence", 0.0)
+
+    # Persist to event stream for offline analysis of classifier accuracy
+    engine.append_event(
+        sid,
+        {
+            "event": "user_prompt",
+            "text_preview": stripped[:120],
+            "text_length": len(stripped),
+            "label": label,
+            "confidence": confidence,
+            "signals": classification.get("signals", []),
+        },
+    )
+
+    # Proactive compaction nudge on confident directives
+    if label == "directive" and confidence >= 0.5:
+        rec = compaction_trigger.should_compact(sid, directive_just_arrived=True)
+        if rec.recommend:
+            return {"systemMessage": compaction_trigger.format_nudge(rec)}
+
     return {}
 
 

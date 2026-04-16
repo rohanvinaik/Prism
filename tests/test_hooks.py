@@ -14,6 +14,7 @@ from prism.hooks import (
     handle_pre_compact,
     handle_session_start,
     handle_stop,
+    handle_user_prompt,
     main,
 )
 
@@ -300,7 +301,37 @@ class TestHandlePreCompact:
         events = read_events("compact_test")
         compact_events = [e for e in events if e["event"] == "pre_compact"]
         assert len(compact_events) == 1
-        assert compact_events[0]["tools_so_far"] == 1
+        e = compact_events[0]
+        assert e["tools_so_far"] == 1
+        # New validation fields
+        assert "frame" in e
+        assert "frame_length" in e
+        assert "frame_injected" in e
+        assert "frame_disabled" in e
+        assert e["frame_disabled"] is False
+        assert e["frame_length"] == len(e["frame"])
+
+    def test_disable_frame_via_env(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        monkeypatch.setenv("PRISM_DISABLE_FRAME", "1")
+
+        handle_session_start({"session_id": "nf_test"})
+        handle_post_tool_use(
+            {"session_id": "nf_test", "tool_name": "Read", "tool_output": "ok"}
+        )
+        result = handle_pre_compact({"session_id": "nf_test"})
+        # Frame disabled — no additionalContext returned
+        assert result == {}
+
+        from prism.engine import read_events
+        events = read_events("nf_test")
+        compact_events = [e for e in events if e["event"] == "pre_compact"]
+        assert compact_events[0]["frame_disabled"] is True
+        assert compact_events[0]["frame_injected"] is False
 
 
 # =====================================================================
@@ -351,6 +382,71 @@ class TestHandleStop:
         monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
         result = handle_stop({"session_id": "empty_sess"})
         assert result == {}
+
+
+# =====================================================================
+# handle_user_prompt — VALUE (classification + compaction nudge)
+# =====================================================================
+
+
+class TestHandleUserPrompt:
+    def _setup_paths(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        monkeypatch.setattr(
+            "prism.phase_matcher._STATE_DIR", tmp_path / "phase_state"
+        )
+
+    def test_records_user_prompt_event_with_classification(self, tmp_path, monkeypatch):
+        self._setup_paths(tmp_path, monkeypatch)
+        handle_user_prompt(
+            {"session_id": "up_test", "userMessage": "implement the feature"}
+        )
+        from prism.engine import read_events
+        events = read_events("up_test")
+        prompt_events = [e for e in events if e.get("event") == "user_prompt"]
+        assert len(prompt_events) == 1
+        assert prompt_events[0]["label"] == "directive"
+        assert "confidence" in prompt_events[0]
+        assert "signals" in prompt_events[0]
+
+    def test_empty_message_silent(self, tmp_path, monkeypatch):
+        self._setup_paths(tmp_path, monkeypatch)
+        result = handle_user_prompt({"session_id": "empty", "userMessage": ""})
+        assert result == {}
+        from prism.engine import read_events
+        assert read_events("empty") == []
+
+    def test_compaction_nudge_on_directive_after_many_tools(self, tmp_path, monkeypatch):
+        self._setup_paths(tmp_path, monkeypatch)
+        handle_session_start({"session_id": "nudge"})
+        # Mixed tool history → avoids the edit-burst guard
+        seq = ["Read", "Bash", "Read", "Bash", "Grep"] * 5
+        for tool in seq:
+            handle_post_tool_use(
+                {"session_id": "nudge", "tool_name": tool, "tool_output": "ok"}
+            )
+        result = handle_user_prompt(
+            {"session_id": "nudge", "userMessage": "now implement the next feature"}
+        )
+        assert "systemMessage" in result
+        assert "/compact" in result["systemMessage"]
+
+    def test_no_nudge_on_continuation(self, tmp_path, monkeypatch):
+        self._setup_paths(tmp_path, monkeypatch)
+        handle_session_start({"session_id": "nonudge"})
+        for _ in range(25):
+            handle_post_tool_use(
+                {"session_id": "nonudge", "tool_name": "Read", "tool_output": "ok"}
+            )
+        result = handle_user_prompt(
+            {"session_id": "nonudge", "userMessage": "yes"}
+        )
+        # Continuation shouldn't trigger compaction nudge
+        assert "systemMessage" not in result
 
 
 # =====================================================================

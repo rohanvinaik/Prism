@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import engine
+from .message_classifier import classify as classify_message
 
 # ---------------------------------------------------------------------------
 # Pattern catalog (loaded once from analysis output)
@@ -128,10 +129,13 @@ class PhaseState:
     symbols: list[str] = field(default_factory=list)  # Abstract symbols
     tool_inputs: list[str] = field(default_factory=list)  # Summarized inputs
     user_text: str = ""  # Latest user prompt text
+    user_text_class: str = ""  # directive | continuation | clarification
+    user_text_confidence: float = 0.0  # Classifier confidence
     files_active: list[str] = field(default_factory=list)  # Recent file paths
     current_pattern: str = ""  # Current matched pattern key
     current_match: dict | None = None  # Matched archetype data
     tool_count: int = 0  # Total tools this session
+    tools_at_last_directive: int = 0  # Tool count when last directive arrived
 
     # Window size — keep last 30 tools for matching
     WINDOW_SIZE: int = 30
@@ -152,9 +156,12 @@ def _load_state(session_id: str) -> PhaseState:
             state.symbols = data.get("symbols", [])
             state.tool_inputs = data.get("tool_inputs", [])
             state.user_text = data.get("user_text", "")
+            state.user_text_class = data.get("user_text_class", "")
+            state.user_text_confidence = data.get("user_text_confidence", 0.0)
             state.files_active = data.get("files_active", [])
             state.current_pattern = data.get("current_pattern", "")
             state.tool_count = data.get("tool_count", 0)
+            state.tools_at_last_directive = data.get("tools_at_last_directive", 0)
             return state
         except (json.JSONDecodeError, OSError):
             pass
@@ -169,9 +176,12 @@ def _save_state(session_id: str, state: PhaseState) -> None:
         "symbols": state.symbols[-state.WINDOW_SIZE:],
         "tool_inputs": state.tool_inputs[-state.WINDOW_SIZE:],
         "user_text": state.user_text,
+        "user_text_class": state.user_text_class,
+        "user_text_confidence": state.user_text_confidence,
         "files_active": state.files_active[-15:],
         "current_pattern": state.current_pattern,
         "tool_count": state.tool_count,
+        "tools_at_last_directive": state.tools_at_last_directive,
     }
     _state_path(session_id).write_text(
         json.dumps(data, separators=(",", ":"), default=str)
@@ -245,14 +255,25 @@ def record_tool(session_id: str, tool_name: str, tool_input_summary: str) -> str
     return pattern
 
 
-def record_user_text(session_id: str, text: str) -> None:
-    """Record the latest user prompt text.
+def record_user_text(session_id: str, text: str) -> dict:
+    """Record the latest user prompt text + classification.
 
-    Called from UserPromptSubmit hook.
+    Called from UserPromptSubmit hook. Returns the classification dict
+    so the hook can log it as a structured event for offline analysis.
     """
     state = _load_state(session_id)
     state.user_text = text[:500]  # Cap stored text
+
+    result = classify_message(text)
+    state.user_text_class = result.label
+    state.user_text_confidence = result.confidence
+
+    # Directive → mark phase boundary (used by proactive-compaction logic later)
+    if result.label == "directive" and result.confidence >= 0.4:
+        state.tools_at_last_directive = state.tool_count
+
     _save_state(session_id, state)
+    return result.to_dict()
 
 
 def build_narrative_frame(session_id: str) -> str:
@@ -282,7 +303,7 @@ def build_narrative_frame(session_id: str) -> str:
         mode = _infer_mode_from_symbols(state.symbols[-15:])
         parts.append(f"Work phase: {mode} ({encoded})")
 
-    # User intent
+    # User intent (labeled by classifier if available)
     if state.user_text:
         # Take first sentence or first 120 chars
         text = state.user_text
@@ -293,7 +314,13 @@ def build_narrative_frame(session_id: str) -> str:
                 break
         else:
             text = text[:120]
-        parts.append(f"User request: {text.strip()}")
+        label_map = {
+            "directive": "User directive",
+            "continuation": "User followup",
+            "clarification": "User question",
+        }
+        label = label_map.get(state.user_text_class, "User request")
+        parts.append(f"{label}: {text.strip()}")
 
     # Active files
     if state.files_active:
@@ -305,7 +332,46 @@ def build_narrative_frame(session_id: str) -> str:
     # Tool count for context
     parts.append(f"Tools used: {state.tool_count}")
 
+    # Next-action hint (heuristic, conservative)
+    hint = _suggest_next_action(state.symbols[-10:])
+    if hint:
+        parts.append(f"Next: {hint}")
+
     return " | ".join(parts) if parts else ""
+
+
+def _suggest_next_action(symbols: list[str], recent_errors: int = 0) -> str:
+    """Heuristic next-action hint based on recent symbol pattern.
+
+    Returns a short phrase suitable for appending to the narrative frame,
+    or "" when no confident suggestion is available. Errs toward silence.
+    """
+    if len(symbols) < 3:
+        return ""
+    tail = symbols[-6:]
+    tail_str = "".join(tail)
+
+    # Recent error → suggest reading output/logs
+    if recent_errors >= 2:
+        return "diagnose errors before continuing"
+
+    # Read-heavy tail with no execution yet — ready to edit
+    if tail.count("R") >= 4 and "W" not in tail and "X" not in tail:
+        return "start editing once exploration is complete"
+
+    # Edit tail with no recent execution → run tests
+    if tail.count("W") >= 2 and "X" not in tail[-4:]:
+        return "run tests to verify the edits"
+
+    # Execution tail → review results
+    if tail.count("X") >= 3 and "R" not in tail[-3:]:
+        return "review results before next edit"
+
+    # Mixed RWX rhythm already established — keep going
+    if "R" in tail_str and "W" in tail_str and "X" in tail_str:
+        return ""  # Healthy implement loop — no hint needed
+
+    return ""
 
 
 def _infer_mode_from_symbols(symbols: list[str]) -> str:
@@ -340,5 +406,8 @@ def get_phase_summary(session_id: str) -> dict:
         "current_mode": _infer_mode_from_symbols(state.symbols[-15:]),
         "active_files": state.files_active[-5:],
         "user_text_preview": state.user_text[:80] if state.user_text else "",
+        "user_text_class": state.user_text_class,
+        "user_text_confidence": state.user_text_confidence,
+        "tools_since_directive": state.tool_count - state.tools_at_last_directive,
         "encoded_window": _encode_runs(state.symbols[-15:]),
     }
