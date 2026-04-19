@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 from . import (
     behavior,
     compaction_analysis,
+    cross_project,
     economics,
     engine,
     fix,
@@ -29,9 +30,9 @@ mcp = FastMCP(
     "Prism",
     instructions=(
         "Holographic Claude Code usage analytics. "
-        "12 tools: snapshot, economics, behavior, trajectory, forensics, "
-        "trends, details (drill-down), health, recommend, fix, pr_ready, "
-        "compaction_analysis. "
+        "13 tools: snapshot, economics, behavior, trajectory, forensics, "
+        "trends, details (drill-down), health, recommend, fix, "
+        "cross_project, pr_ready, compaction_analysis. "
         "Each tool returns a compact summary + snapshot_id. "
         "Call prism_details(id, section) to drill into full data on demand. "
         "IMPORTANT: Pass the current project name in the `project` param "
@@ -127,17 +128,36 @@ def prism_trends(days: int = 7, project: str = "") -> str:
 
 
 @mcp.tool()
-def prism_health(project_path: str = "") -> str:
+def prism_health(project_path: str = "", profile: str = "") -> str:
     """Project setup maturity: venv, lockfile, git, CI, secrets, toolchain.
 
-    Scores 0-100 and persists state for LintGate consumption.
+    Scores 0-100 under a chosen weight profile and persists state for
+    LintGate consumption.
+
+    Args:
+        project_path: Absolute path to project root.
+        profile: Weight profile (solo_dev | shared_repo | production).
+            Empty falls back to PRISM_WEIGHT_PROFILE env var or solo_dev.
+    """
+    if not project_path:
+        return "Error: project_path is required (MCP server cwd is not project-specific)."
+    return health.check(project_path, profile=profile or None)
+
+
+@mcp.tool()
+def prism_cross_project(project_path: str = "") -> str:
+    """Cross-project pattern surface — gaps relative to your other projects.
+
+    Compares this project against peers of the same type. Surfaces only
+    attributes that >=66% of >=3 peers have but this one lacks. Grounded
+    in your own patterns, not generic best-practice.
 
     Args:
         project_path: Absolute path to project root.
     """
     if not project_path:
-        return "Error: project_path is required (MCP server cwd is not project-specific)."
-    return health.check(project_path)
+        return "Error: project_path is required."
+    return cross_project.summarize(project_path)
 
 
 @mcp.tool()

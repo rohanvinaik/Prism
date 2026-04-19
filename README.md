@@ -98,6 +98,7 @@ Prism auto-detects these if present. If they're not installed, those sections si
 | `prism_health` | Project setup maturity (0-100) |
 | `prism_recommend` | Confidence-scored automation recommendations |
 | `prism_fix` | Deterministic auto-remediation (dry-run by default) |
+| `prism_cross_project` | Pattern-based gaps relative to your other projects |
 | `prism_pr_ready` | PR readiness gate (go/no-go) |
 | `prism_compaction_analysis` | A/B validation of narrative-frame injection at compaction boundaries |
 | `prism_details` | Drill into any snapshot by section |

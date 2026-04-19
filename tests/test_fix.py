@@ -73,6 +73,40 @@ class TestFixRegistry:
         assert ok is True
         assert "already exists" in msg.lower()
 
+    def test_cache_ignores_safe_merge(self, tmp_path):
+        """Safe-merge appends entries without clobbering existing content."""
+        (tmp_path / ".gitignore").write_text("custom_entry/\n")
+        (tmp_path / ".ruff_cache").mkdir()
+        (tmp_path / ".mypy_cache").mkdir()
+        fix_fn = FIX_REGISTRY["Ignore cache directories"]
+        ok, msg = fix_fn(str(tmp_path))
+        assert ok is True
+        assert "Added 2" in msg
+        content = (tmp_path / ".gitignore").read_text()
+        assert "custom_entry/" in content
+        assert ".ruff_cache/" in content
+        assert ".mypy_cache/" in content
+        assert "Prism" in content
+
+    def test_cache_ignores_idempotent(self, tmp_path):
+        (tmp_path / ".pytest_cache").mkdir()
+        fix_fn = FIX_REGISTRY["Ignore cache directories"]
+        ok_first, _ = fix_fn(str(tmp_path))
+        first = (tmp_path / ".gitignore").read_text()
+        ok, msg = fix_fn(str(tmp_path))
+        second = (tmp_path / ".gitignore").read_text()
+        assert ok_first is True
+        assert ok is True
+        assert first == second
+        assert "No missing" in msg
+
+    def test_cache_ignores_no_action_when_clean(self, tmp_path):
+        fix_fn = FIX_REGISTRY["Ignore cache directories"]
+        ok, msg = fix_fn(str(tmp_path))
+        assert ok is True
+        assert "No missing" in msg
+        assert not (tmp_path / ".gitignore").exists()
+
     def test_linter_fix(self, tmp_path):
         fix_fn = FIX_REGISTRY["Configure a linter"]
         ok, msg = fix_fn(str(tmp_path))

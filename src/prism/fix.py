@@ -81,7 +81,16 @@ def _fix_lockfile(project_path: str) -> tuple[bool, str]:
 
 @_register("Refresh stale lockfile")
 def _fix_stale_lockfile(project_path: str) -> tuple[bool, str]:
-    return _run_cmd(["uv", "lock"], project_path)
+    from . import health
+
+    ok, msg = _run_cmd(["uv", "lock"], project_path)
+    if ok:
+        # Update the resolver-input hash sidecar so future stale checks
+        # don't false-positive on cosmetic pyproject edits.
+        h = health._resolver_hash(Path(project_path), "pyproject.toml")
+        if h:
+            health._write_stored_hash(Path(project_path), h)
+    return ok, msg
 
 
 @_register("Initialize git")
@@ -114,6 +123,33 @@ def _fix_gitignore(project_path: str) -> tuple[bool, str]:
 
     gitignore.write_text(template)
     return True, f"Created .gitignore ({len(template.splitlines())} entries)"
+
+
+@_register("Ignore cache directories")
+def _fix_cache_ignores(project_path: str) -> tuple[bool, str]:
+    """Safe-merge missing cache entries into .gitignore.
+
+    Reads existing content, computes the set of entries that need adding,
+    and appends them in a managed block. Never clobbers existing content;
+    idempotent across re-runs.
+    """
+    from . import health
+
+    root = Path(project_path)
+    gitignore = root / ".gitignore"
+    detection = health._detect_missing_cache_ignores(root)
+    missing = detection["missing"]
+    if not missing:
+        return True, "No missing cache entries to add"
+
+    existing = gitignore.read_text() if gitignore.is_file() else ""
+    # Append a managed block so re-runs are stable.
+    block_header = "# Prism: cache directories"
+    addition_lines = [block_header] + sorted(missing)
+    suffix = "\n" if existing and not existing.endswith("\n") else ""
+    new_content = existing + suffix + ("\n" if existing else "") + "\n".join(addition_lines) + "\n"
+    gitignore.write_text(new_content)
+    return True, f"Added {len(missing)} cache entries to .gitignore: {', '.join(missing)}"
 
 
 @_register("Remove .env from git tracking")

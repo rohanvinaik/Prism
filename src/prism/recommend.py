@@ -15,7 +15,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from . import engine, sources
+from . import engine, project_type, sources
 from .sources import available_integrations
 
 SETTINGS_PATH = Path.home() / ".claude" / "settings.json"
@@ -128,6 +128,81 @@ def _setup_recommendations(project_path: str) -> list[dict]:
             )
         )
 
+    sqlite_check = checks.get("sqlite", {})
+    sqlite_warnings = sqlite_check.get("warnings", [])
+    if sqlite_warnings:
+        names = ", ".join(w["db"] for w in sqlite_warnings[:2])
+        more = f" (+{len(sqlite_warnings) - 2} more)" if len(sqlite_warnings) > 2 else ""
+        recs.append(
+            _rec(
+                "setup",
+                "low",
+                "Database backup recommended",
+                f"Recently-modified DB(s) {names}{more} alongside uncommitted schema changes.",
+                "Back up the DB before next destructive operation",
+                70,
+            )
+        )
+
+    secrets_scan_result = checks.get("secrets_scan", {})
+    leaks = secrets_scan_result.get("findings", [])
+    if leaks:
+        rules = ", ".join(sorted({lk.get("rule", "?") for lk in leaks})[:3])
+        recs.append(
+            _rec(
+                "security",
+                "critical",
+                "Secrets detected in staged files",
+                f"{len(leaks)} potential secret(s) staged for commit ({rules}).",
+                "Unstage with `git reset HEAD <file>` and rotate the credential",
+                98,
+            )
+        )
+
+    remote = checks.get("remote", {})
+    if remote.get("remote_name_collision"):
+        recs.append(
+            _rec(
+                "setup",
+                "high",
+                "Remote name collision",
+                f"A repo named {remote['remote_name_collision']} already exists on your account.",
+                "Pick a different name or use `gh repo view` to inspect the existing one",
+                95,
+            )
+        )
+
+    large_files = checks.get("large_files", {})
+    big = large_files.get("files", [])
+    if big:
+        names = ", ".join(f["path"] for f in big[:3])
+        more = f" (+{len(big) - 3} more)" if len(big) > 3 else ""
+        threshold_mb = large_files.get("threshold", 0) / (1024 * 1024)
+        recs.append(
+            _rec(
+                "setup",
+                "high",
+                "Large staged files detected",
+                f"{len(big)} staged file(s) over {threshold_mb:.0f}MB: {names}{more}.",
+                "Move to git-lfs, add to .gitignore, or unstage with `git reset HEAD <file>`",
+                95,
+            )
+        )
+
+    cache_ignores = checks.get("cache_ignores", {})
+    missing_caches = cache_ignores.get("missing", [])
+    if missing_caches:
+        recs.append(
+            _rec(
+                "setup",
+                "medium",
+                "Ignore cache directories",
+                f"{len(missing_caches)} cache dir(s) not ignored: {', '.join(missing_caches)}.",
+                "append cache entries to .gitignore (safe-merge)",
+                95,
+            )
+        )
+
     secrets = checks.get("secrets", {})
     if secrets.get("env_committed"):
         recs.append(
@@ -140,6 +215,10 @@ def _setup_recommendations(project_path: str) -> list[dict]:
                 98,
             )
         )
+
+    # Type-specific recommendations gated on a project fingerprint.
+    fingerprint = project_type.detect(project_path)
+    recs.extend(project_type.type_specific_recommendations(fingerprint["type"], Path(project_path)))
 
     toolchain = checks.get("toolchain", {})
     if not any(toolchain.values()) and has_manifest:
