@@ -139,6 +139,175 @@ class TestCacheIgnoreDetection:
         assert result["missing"] == []
 
 
+class TestComputeScore:
+    """Direct exact-value tests for _compute_score — pin weight constants.
+
+    Class name matches LintGate's test-to-function discovery heuristic so
+    mutation profiling links these tests to _compute_score.
+    """
+
+    BASE_CHECKS_FULL = {
+        "venv": {"found": True, "path": ".venv"},
+        "lockfile": {"found": "uv.lock", "stale": False, "stale_reason": None},
+        "git": {"initialized": True, "gitignore": True, "clean": True},
+        "ci": {"found": True, "type": ".github/workflows"},
+        "secrets": {"env_in_gitignore": True, "env_committed": False},
+        "toolchain": {"ruff": True, "mypy": True},
+    }
+    BASE_CHECKS_EMPTY = {
+        "venv": {"found": False, "path": None},
+        "lockfile": {"found": None, "stale": False, "stale_reason": None},
+        "git": {"initialized": False, "gitignore": False, "clean": False},
+        "ci": {"found": False, "type": None},
+        "secrets": {"env_in_gitignore": False, "env_committed": True},
+        "toolchain": {},
+    }
+
+    def test_compute_score_solo_dev_full_setup_is_100(self):
+        from prism.health import _compute_score
+
+        assert _compute_score(self.BASE_CHECKS_FULL, profile="solo_dev") == 100
+
+    def test_compute_score_production_full_setup_is_100(self):
+        from prism.health import _compute_score
+
+        assert _compute_score(self.BASE_CHECKS_FULL, profile="production") == 100
+
+    def test_compute_score_shared_repo_full_setup_is_100(self):
+        from prism.health import _compute_score
+
+        assert _compute_score(self.BASE_CHECKS_FULL, profile="shared_repo") == 100
+
+    def test_compute_score_empty_setup_minimum(self):
+        """Empty setup still scores secrets_not_committed (no .env file present)."""
+        from prism.health import _compute_score
+
+        # Empty fixture has env_committed=True so even secrets_not_committed is 0
+        assert _compute_score(self.BASE_CHECKS_EMPTY, profile="solo_dev") == 0
+
+    def test_compute_score_only_venv_solo_dev(self):
+        from prism.health import _compute_score
+
+        c = dict(self.BASE_CHECKS_EMPTY, venv={"found": True, "path": ".venv"})
+        # solo_dev venv weight = 15, total weights sum = 100 → 15
+        assert _compute_score(c, profile="solo_dev") == 15
+
+    def test_compute_score_only_venv_production(self):
+        from prism.health import _compute_score
+
+        c = dict(self.BASE_CHECKS_EMPTY, venv={"found": True, "path": ".venv"})
+        # production venv weight = 5, total = 100 → 5
+        assert _compute_score(c, profile="production") == 5
+
+    def test_compute_score_only_ci_production(self):
+        from prism.health import _compute_score
+
+        c = dict(self.BASE_CHECKS_EMPTY, ci={"found": True, "type": ".github/workflows"})
+        # production CI weight = 25 → 25
+        assert _compute_score(c, profile="production") == 25
+
+    def test_compute_score_only_ci_solo_dev(self):
+        from prism.health import _compute_score
+
+        c = dict(self.BASE_CHECKS_EMPTY, ci={"found": True, "type": ".github/workflows"})
+        # solo_dev CI weight = 5 → 5
+        assert _compute_score(c, profile="solo_dev") == 5
+
+    def test_compute_score_stale_lockfile_yields_half_credit(self):
+        from prism.health import _compute_score
+
+        fresh = dict(
+            self.BASE_CHECKS_EMPTY,
+            lockfile={"found": "uv.lock", "stale": False, "stale_reason": None},
+        )
+        stale = dict(
+            self.BASE_CHECKS_EMPTY,
+            lockfile={"found": "uv.lock", "stale": True, "stale_reason": "x"},
+        )
+        # solo_dev lockfile weight = 10 → fresh 10, stale 5
+        assert _compute_score(fresh, profile="solo_dev") == 10
+        assert _compute_score(stale, profile="solo_dev") == 5
+
+    def test_compute_score_toolchain_zero_one_two_tiers(self):
+        from prism.health import _compute_score
+
+        zero = dict(self.BASE_CHECKS_EMPTY, toolchain={"ruff": False, "mypy": False})
+        one = dict(self.BASE_CHECKS_EMPTY, toolchain={"ruff": True, "mypy": False})
+        two = dict(self.BASE_CHECKS_EMPTY, toolchain={"ruff": True, "mypy": True})
+        # solo_dev toolchain = 15: 0 / 7 (15//2) / 15
+        assert _compute_score(zero, profile="solo_dev") == 0
+        assert _compute_score(one, profile="solo_dev") == 7
+        assert _compute_score(two, profile="solo_dev") == 15
+
+    def test_compute_score_git_components_split(self):
+        """git_init / git_ignore / git_clean each contribute independently."""
+        from prism.health import _compute_score
+
+        only_init = dict(
+            self.BASE_CHECKS_EMPTY,
+            git={"initialized": True, "gitignore": False, "clean": False},
+        )
+        init_and_ignore = dict(
+            self.BASE_CHECKS_EMPTY,
+            git={"initialized": True, "gitignore": True, "clean": False},
+        )
+        all_three = dict(
+            self.BASE_CHECKS_EMPTY,
+            git={"initialized": True, "gitignore": True, "clean": True},
+        )
+        # solo_dev git weights: init=15, ignore=5, clean=10
+        assert _compute_score(only_init, profile="solo_dev") == 15
+        assert _compute_score(init_and_ignore, profile="solo_dev") == 20
+        assert _compute_score(all_three, profile="solo_dev") == 30
+
+    def test_compute_score_secrets_components_split(self):
+        from prism.health import _compute_score
+
+        # env_in_gitignore = True only
+        ign_only = dict(
+            self.BASE_CHECKS_EMPTY,
+            secrets={"env_in_gitignore": True, "env_committed": True},
+        )
+        # not committed only (no ignore)
+        not_committed_only = dict(
+            self.BASE_CHECKS_EMPTY,
+            secrets={"env_in_gitignore": False, "env_committed": False},
+        )
+        # both
+        both = dict(
+            self.BASE_CHECKS_EMPTY,
+            secrets={"env_in_gitignore": True, "env_committed": False},
+        )
+        # solo_dev: secrets_ignore=15, secrets_not_committed=10
+        assert _compute_score(ign_only, profile="solo_dev") == 15
+        assert _compute_score(not_committed_only, profile="solo_dev") == 10
+        assert _compute_score(both, profile="solo_dev") == 25
+
+    def test_compute_score_unknown_profile_falls_back_to_solo_dev(self):
+        from prism.health import _compute_score
+
+        c = dict(self.BASE_CHECKS_EMPTY, venv={"found": True, "path": ".venv"})
+        bogus = _compute_score(c, profile="bogus_profile")
+        default = _compute_score(c, profile="solo_dev")
+        assert bogus == default
+
+    def test_compute_score_env_var_selects_profile(self, monkeypatch):
+        from prism.health import _compute_score
+
+        monkeypatch.setenv("PRISM_WEIGHT_PROFILE", "production")
+        c = dict(self.BASE_CHECKS_EMPTY, venv={"found": True, "path": ".venv"})
+        # profile=None → falls through to env var → production
+        assert _compute_score(c, profile=None) == 5
+
+    def test_compute_score_explicit_profile_beats_env_var(self, monkeypatch):
+        from prism.health import _compute_score
+
+        monkeypatch.setenv("PRISM_WEIGHT_PROFILE", "production")
+        c = dict(self.BASE_CHECKS_EMPTY, venv={"found": True, "path": ".venv"})
+        # Explicit solo_dev should override env var
+        assert _compute_score(c, profile="solo_dev") == 15
+
+
 class TestLockfileResolverHash:
     PYPROJECT_BASE = (
         "[project]\n"
