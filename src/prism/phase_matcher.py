@@ -149,6 +149,15 @@ class PhaseState:
     tool_count: int = 0  # Total tools this session
     tools_at_last_directive: int = 0  # Tool count when last directive arrived
 
+    # Frame-state fields — populated by frame_check hook when a skill activates.
+    # See ~/.claude/skills/SCHEMA.md for the frame block shape.
+    active_frame: dict | None = None  # Parsed `frame` block from active skill's frontmatter
+    active_frame_skill: str = ""  # Kebab-case name of active skill (for PreCompact injection)
+    active_frame_invoked_at: int = 0  # tool_count value when frame activated
+    last_next_actions: list[dict] = field(default_factory=list)  # Items: {tool, args, priority}
+    last_next_actions_run_id: str = ""  # Provenance for stale detection
+    frame_deviations: list[dict] = field(default_factory=list)  # Logged manual overrides
+
     # Window size — keep last 30 tools for matching
     WINDOW_SIZE: int = 30
 
@@ -174,6 +183,13 @@ def _load_state(session_id: str) -> PhaseState:
             state.current_pattern = data.get("current_pattern", "")
             state.tool_count = data.get("tool_count", 0)
             state.tools_at_last_directive = data.get("tools_at_last_directive", 0)
+            # Frame-state fields (added for skill-frame discipline)
+            state.active_frame = data.get("active_frame")
+            state.active_frame_skill = data.get("active_frame_skill", "")
+            state.active_frame_invoked_at = data.get("active_frame_invoked_at", 0)
+            state.last_next_actions = data.get("last_next_actions", [])
+            state.last_next_actions_run_id = data.get("last_next_actions_run_id", "")
+            state.frame_deviations = data.get("frame_deviations", [])
             return state
         except (json.JSONDecodeError, OSError):
             pass
@@ -194,6 +210,13 @@ def _save_state(session_id: str, state: PhaseState) -> None:
         "current_pattern": state.current_pattern,
         "tool_count": state.tool_count,
         "tools_at_last_directive": state.tools_at_last_directive,
+        # Frame-state fields
+        "active_frame": state.active_frame,
+        "active_frame_skill": state.active_frame_skill,
+        "active_frame_invoked_at": state.active_frame_invoked_at,
+        "last_next_actions": state.last_next_actions,
+        "last_next_actions_run_id": state.last_next_actions_run_id,
+        "frame_deviations": state.frame_deviations[-20:],
     }
     _state_path(session_id).write_text(json.dumps(data, separators=(",", ":"), default=str))
 
@@ -290,6 +313,7 @@ def build_narrative_frame(session_id: str) -> str:
     """Build a compact focus string for context compaction.
 
     Called from PreCompact hook. Constructs a narrative frame from:
+    - Active skill frame (if any) — survives compaction, declares the discipline
     - Current phase pattern (what kind of work is happening)
     - User's last prompt (what they asked for)
     - Active files (what's being worked on)
@@ -299,6 +323,21 @@ def build_narrative_frame(session_id: str) -> str:
     state = _load_state(session_id)
 
     parts: list[str] = []
+
+    # Active skill frame — survives compaction to preserve discipline
+    if state.active_frame_skill:
+        frame = state.active_frame or {}
+        ftype = frame.get("type", "?")
+        authority = frame.get("authority", "?")
+        parts.append(
+            f"ACTIVE SKILL: {state.active_frame_skill} "
+            f"(type={ftype}, authority={authority})"
+        )
+        # Pinned references — the most load-bearing constraints
+        refs = frame.get("pinned_references") or []
+        if isinstance(refs, list) and refs:
+            top_refs = [str(r) for r in refs[:2]]
+            parts.append(f"Pinned: {' | '.join(top_refs)}")
 
     # Phase description
     if state.current_pattern and state.current_match:
@@ -420,4 +459,159 @@ def get_phase_summary(session_id: str) -> dict:
         "user_text_confidence": state.user_text_confidence,
         "tools_since_directive": state.tool_count - state.tools_at_last_directive,
         "encoded_window": _encode_runs(state.symbols[-15:]),
+        "active_frame_skill": state.active_frame_skill,
+        "last_next_actions": state.last_next_actions,
     }
+
+
+# ---------------------------------------------------------------------------
+# Frame-state helpers (called from hook handlers)
+# ---------------------------------------------------------------------------
+
+
+def _try_parse_json(obj):
+    """Best-effort JSON parse. Returns parsed object or None."""
+    if isinstance(obj, (dict, list)):
+        return obj
+    if isinstance(obj, str):
+        try:
+            return json.loads(obj)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return None
+
+
+def extract_next_actions(tool_output) -> tuple[list[dict], str]:
+    """Extract next_actions list and run_id provenance from a tool response.
+
+    Walks up to 3 levels of nesting (tool_output -> "result" -> nested JSON string)
+    looking for a `next_actions` key. Returns (items, run_id) where items is a
+    normalized list of {tool, args, priority} dicts, or ([], "") if absent.
+
+    Defensive: handles string-wrapped JSON, dict tool_outputs, and missing fields
+    without raising.
+    """
+    candidates: object = None
+    run_id = ""
+    cursor: object = tool_output
+
+    for _ in range(3):
+        # Unwrap string -> JSON if needed
+        if isinstance(cursor, str):
+            cursor = _try_parse_json(cursor)
+            if cursor is None:
+                return [], ""
+
+        if not isinstance(cursor, dict):
+            return [], ""
+
+        # Capture run_id provenance if present at this level
+        ri = cursor.get("run_id") or cursor.get("analysis_id")  # type: ignore[union-attr]
+        if isinstance(ri, str) and ri:
+            run_id = ri
+
+        if "next_actions" in cursor:
+            candidates = cursor.get("next_actions", [])  # type: ignore[union-attr]
+            break
+
+        # MCP commonly wraps tool responses as {"result": "...json string..."}
+        if "result" in cursor:
+            cursor = cursor.get("result")  # type: ignore[union-attr]
+            continue
+
+        return [], ""
+    else:
+        return [], ""
+
+    if not isinstance(candidates, list):
+        return [], ""
+
+    # Normalize each item to {tool, args, priority}
+    normalized: list[dict] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        tool = item.get("tool", "")
+        if not isinstance(tool, str) or not tool:
+            continue
+        args = item.get("args", {})
+        if not isinstance(args, dict):
+            args = {}
+        priority_raw = item.get("priority", 0)
+        try:
+            priority = int(priority_raw)
+        except (TypeError, ValueError):
+            priority = 0
+        normalized.append({"tool": tool, "args": args, "priority": priority})
+
+    return normalized, run_id
+
+
+def update_next_actions(session_id: str, next_actions: list[dict], run_id: str = "") -> None:
+    """Persist a freshly-extracted next_actions list to phase_state.
+
+    Called from PostToolUse handler after extract_next_actions succeeds.
+    """
+    state = _load_state(session_id)
+    state.last_next_actions = next_actions
+    state.last_next_actions_run_id = run_id
+    _save_state(session_id, state)
+
+
+def clear_next_actions(session_id: str) -> None:
+    """Clear last_next_actions (e.g., on new user directive)."""
+    state = _load_state(session_id)
+    state.last_next_actions = []
+    state.last_next_actions_run_id = ""
+    _save_state(session_id, state)
+
+
+def activate_frame(session_id: str, skill_name: str, frame: dict) -> None:
+    """Write a skill's parsed frame block to phase_state.
+
+    Called when a Skill tool call is detected (frame_check.handle_skill_invocation).
+    """
+    state = _load_state(session_id)
+    state.active_frame = frame
+    state.active_frame_skill = skill_name
+    state.active_frame_invoked_at = state.tool_count
+    _save_state(session_id, state)
+
+
+def deactivate_frame(session_id: str, reason: str = "") -> None:
+    """Clear active_frame when a termination condition fires."""
+    state = _load_state(session_id)
+    if state.active_frame is None:
+        return
+    # Record termination as a deviation entry for traceability
+    state.frame_deviations.append(
+        {
+            "type": "frame_deactivated",
+            "skill": state.active_frame_skill,
+            "reason": reason,
+            "at_tool_count": state.tool_count,
+        }
+    )
+    state.active_frame = None
+    state.active_frame_skill = ""
+    state.active_frame_invoked_at = 0
+    _save_state(session_id, state)
+
+
+def record_frame_deviation(session_id: str, deviation: dict) -> None:
+    """Log a manual frame override (e.g., user-justified deviation)."""
+    state = _load_state(session_id)
+    state.frame_deviations.append(deviation)
+    _save_state(session_id, state)
+
+
+def get_active_frame(session_id: str) -> tuple[dict | None, str]:
+    """Get the currently-active frame and skill name, or (None, '')."""
+    state = _load_state(session_id)
+    return state.active_frame, state.active_frame_skill
+
+
+def get_last_next_actions(session_id: str) -> tuple[list[dict], str]:
+    """Get the most recent next_actions list and its run_id provenance."""
+    state = _load_state(session_id)
+    return state.last_next_actions, state.last_next_actions_run_id

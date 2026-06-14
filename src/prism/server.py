@@ -36,7 +36,17 @@ mcp = FastMCP(
         "Each tool returns a compact summary + snapshot_id. "
         "Call prism_details(id, section) to drill into full data on demand. "
         "IMPORTANT: Pass the current project name in the `project` param "
-        "to scope results to this project. Leave empty for global view."
+        "to scope results to this project. Leave empty for global view. "
+        "Part of the repo-setup/hygiene trio (SetupAtlas, Prism, LintGate): an agent "
+        "points the trio at a project and autonomously executes the emitted findings "
+        "to reach a clean professional baseline. Prism covers per-repo SETUP MATURITY "
+        "(venv/lockfile/git/CI/secrets/toolchain); SetupAtlas covers the machine and "
+        "LintGate covers Python code. "
+        "For repo automation the entry point is prism_health(project_path=...) — pass "
+        "an explicit path. CAVEAT: large binary/data files in the tree (*.db, data "
+        "dumps) can break the scanner; point it at code roots, not data-heavy trees. "
+        "The tools surface findings and hold no opinion on whether a finding warrants "
+        "a fix or a deletion — that judgment is the calling agent's."
     ),
 )
 

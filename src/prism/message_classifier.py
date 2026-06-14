@@ -20,190 +20,52 @@ import re
 from dataclasses import dataclass
 
 # Imperative verbs — canonical start-of-sentence indicators for directives
-_DIRECTIVE_VERBS = frozenset(
-    {
-        "add",
-        "build",
-        "change",
-        "create",
-        "delete",
-        "fix",
-        "implement",
-        "make",
-        "move",
-        "refactor",
-        "remove",
-        "rename",
-        "rewrite",
-        "run",
-        "start",
-        "stop",
-        "switch",
-        "update",
-        "write",
-        "check",
-        "test",
-        "review",
-        "analyze",
-        "deploy",
-        "install",
-        "set",
-        "configure",
-        "optimize",
-        "improve",
-        "port",
-        "extract",
-        "merge",
-        "split",
-        "replace",
-        "apply",
-        "generate",
-        "migrate",
-        "upgrade",
-        "downgrade",
-        "push",
-        "pull",
-        "commit",
-        "revert",
-        "undo",
-        "redo",
-        "clean",
-        "show",
-        "list",
-        "find",
-        "search",
-        "look",
-        "explore",
-        "trace",
-        "debug",
-        "profile",
-        "benchmark",
-    }
-)
+_DIRECTIVE_VERBS = frozenset({
+    "add", "build", "change", "create", "delete", "fix", "implement",
+    "make", "move", "refactor", "remove", "rename", "rewrite", "run",
+    "start", "stop", "switch", "update", "write", "check", "test",
+    "review", "analyze", "deploy", "install", "set", "configure",
+    "optimize", "improve", "port", "extract", "merge", "split",
+    "replace", "apply", "generate", "migrate", "upgrade", "downgrade",
+    "push", "pull", "commit", "revert", "undo", "redo", "clean",
+    "show", "list", "find", "search", "look", "explore", "trace",
+    "debug", "profile", "benchmark",
+})
 
 # Phrases that signal "let's move on" — typically start new work
 _DIRECTIVE_PHRASES = (
-    "let's",
-    "lets ",
-    "now ",
-    "next,",
-    "next ",
-    "move on",
-    "moving on",
-    "switch to",
-    "start ",
-    "begin ",
-    "time to",
-    "new task",
-    "different task",
-    "unrelated",
-    "pivot",
-    "change of plans",
+    "let's", "lets ", "now ", "next,", "next ", "move on", "moving on",
+    "switch to", "start ", "begin ", "time to", "new task", "different task",
+    "unrelated", "pivot", "change of plans",
 )
 
 # Affirmatives / short continuations
-_CONTINUATION_TOKENS = frozenset(
-    {
-        "yes",
-        "yeah",
-        "yep",
-        "yup",
-        "y",
-        "ok",
-        "okay",
-        "sure",
-        "right",
-        "sounds good",
-        "sounds great",
-        "go",
-        "go on",
-        "continue",
-        "proceed",
-        "keep going",
-        "do it",
-        "go for it",
-        "fine",
-        "good",
-        "great",
-        "perfect",
-        "nice",
-        "awesome",
-        "correct",
-        "exactly",
-        "agreed",
-        "approved",
-        "fair enough",
-        "makes sense",
-        "got it",
-        "thanks",
-        "thank you",
-        "no",
-        "nope",
-        "not quite",
-        "not exactly",
-        "wait",
-        "hold on",
-        "stop",
-    }
-)
+_CONTINUATION_TOKENS = frozenset({
+    "yes", "yeah", "yep", "yup", "y", "ok", "okay", "sure", "right",
+    "sounds good", "sounds great", "go", "go on", "continue", "proceed",
+    "keep going", "do it", "go for it", "fine", "good", "great", "perfect",
+    "nice", "awesome", "correct", "exactly", "agreed", "approved",
+    "fair enough", "makes sense", "got it", "thanks", "thank you",
+    "no", "nope", "not quite", "not exactly", "wait", "hold on", "stop",
+})
 
 # Question leads — clarification signals
 # Strong question leads — imply question regardless of punctuation
-_STRONG_Q_LEADS = frozenset(
-    {
-        "why",
-        "what",
-        "how",
-        "when",
-        "where",
-        "which",
-        "who",
-        "whose",
-        "whom",
-    }
-)
+_STRONG_Q_LEADS = frozenset({
+    "why", "what", "how", "when", "where", "which", "who", "whose", "whom",
+})
 
 # Modal / auxiliary leads — only imply question if ends with ?
-_MODAL_Q_LEADS = frozenset(
-    {
-        "can",
-        "could",
-        "would",
-        "should",
-        "does",
-        "do",
-        "did",
-        "is",
-        "are",
-        "was",
-        "were",
-        "will",
-        "has",
-        "have",
-        "had",
-    }
-)
+_MODAL_Q_LEADS = frozenset({
+    "can", "could", "would", "should", "does", "do", "did", "is", "are",
+    "was", "were", "will", "has", "have", "had",
+})
 
 _CLARIFICATION_PHRASES = (
-    "explain",
-    "clarify",
-    "elaborate",
-    "walk me through",
-    "tell me",
-    "describe",
-    "what does",
-    "what is",
-    "what's",
-    "how does",
-    "how do",
-    "why did",
-    "why does",
-    "why is",
-    "can you explain",
-    "help me understand",
-    "i don't understand",
-    "i'm confused",
-    "not sure what",
+    "explain", "clarify", "elaborate", "walk me through", "tell me",
+    "describe", "what does", "what is", "what's", "how does", "how do",
+    "why did", "why does", "why is", "can you explain", "help me understand",
+    "i don't understand", "i'm confused", "not sure what",
 )
 
 _WORD_RE = re.compile(r"\b[a-z']+\b")
@@ -232,76 +94,6 @@ def _word_count(text: str) -> int:
     return len(_WORD_RE.findall(text))
 
 
-def _score_clarification(
-    lower: str, first: str, word_count: int, ends_with_question: bool
-) -> tuple[float, float, list[str]]:
-    """Return (clarification_score, directive_score_delta, signals).
-
-    The directive delta covers the "modal + imperative verb" case
-    (e.g., "can you implement X?") which reads as a directive, not a
-    question.
-    """
-    score = 0.0
-    directive_delta = 0.0
-    signals: list[str] = []
-
-    if ends_with_question:
-        score += 0.6
-        signals.append("ends_with_?")
-    if first in _STRONG_Q_LEADS and word_count >= 2:
-        score += 0.4
-        signals.append(f"q_lead:{first}")
-    elif first in _MODAL_Q_LEADS and ends_with_question and word_count >= 2:
-        if any(v in lower.split()[:6] for v in _DIRECTIVE_VERBS):
-            directive_delta += 0.5
-            signals.append("modal+imperative")
-        else:
-            score += 0.4
-            signals.append(f"q_lead:{first}")
-    if any(p in lower for p in _CLARIFICATION_PHRASES):
-        score += 0.4
-        signals.append("clarify_phrase")
-
-    return score, directive_delta, signals
-
-
-def _score_directive(lower: str, first: str) -> tuple[float, list[str]]:
-    score = 0.0
-    signals: list[str] = []
-
-    if first in _DIRECTIVE_VERBS:
-        score += 0.7
-        signals.append(f"imperative:{first}")
-    if any(lower.startswith(p) for p in _DIRECTIVE_PHRASES):
-        score += 0.5
-        signals.append("directive_phrase")
-    if any(p in lower for p in (" instead", " instead of", "not that")):
-        score += 0.3
-        signals.append("corrective")
-
-    return score, signals
-
-
-def _score_continuation(
-    lower: str, word_count: int, ends_with_question: bool, directive_score: float
-) -> tuple[float, list[str]]:
-    score = 0.0
-    signals: list[str] = []
-
-    stripped = lower.rstrip(".!?,;:")
-    if stripped in _CONTINUATION_TOKENS:
-        score += 0.8
-        signals.append(f"affirmative:{stripped}")
-    elif word_count <= 3 and any(tok in stripped for tok in _CONTINUATION_TOKENS):
-        score += 0.5
-        signals.append("short_affirmative")
-    if word_count <= 5 and not ends_with_question and directive_score < 0.3:
-        score += 0.3
-        signals.append("short_non_question")
-
-    return score, signals
-
-
 def classify(text: str) -> ClassificationResult:
     """Classify a user message. Pure function, no side effects."""
     if not text or not text.strip():
@@ -313,17 +105,59 @@ def classify(text: str) -> ClassificationResult:
     first = _first_word(lower)
     ends_with_question = raw.rstrip().endswith("?")
 
-    clarification_score, directive_delta, clar_signals = _score_clarification(
-        lower, first, word_count, ends_with_question
-    )
-    directive_score, dir_signals = _score_directive(lower, first)
-    directive_score += directive_delta
-    continuation_score, cont_signals = _score_continuation(
-        lower, word_count, ends_with_question, directive_score
-    )
+    signals: list[str] = []
+    directive_score = 0.0
+    continuation_score = 0.0
+    clarification_score = 0.0
 
-    signals = clar_signals + dir_signals + cont_signals
+    # ---- Clarification: strongest single signal is a question mark ----
+    if ends_with_question:
+        clarification_score += 0.6
+        signals.append("ends_with_?")
+    if first in _STRONG_Q_LEADS and word_count >= 2:
+        clarification_score += 0.4
+        signals.append(f"q_lead:{first}")
+    elif first in _MODAL_Q_LEADS and ends_with_question and word_count >= 2:
+        # Modal leads only count when the sentence is explicitly a question.
+        # "can you explain X?" → clarification; "can you implement X?" is
+        # decided below by the directive verb check.
+        if any(v in lower.split()[:6] for v in _DIRECTIVE_VERBS):
+            directive_score += 0.5
+            signals.append("modal+imperative")
+        else:
+            clarification_score += 0.4
+            signals.append(f"q_lead:{first}")
+    if any(p in lower for p in _CLARIFICATION_PHRASES):
+        clarification_score += 0.4
+        signals.append("clarify_phrase")
 
+    # ---- Directive: imperative verb at start or phrase indicators ----
+    if first in _DIRECTIVE_VERBS:
+        directive_score += 0.7
+        signals.append(f"imperative:{first}")
+    if any(lower.startswith(p) for p in _DIRECTIVE_PHRASES):
+        directive_score += 0.5
+        signals.append("directive_phrase")
+    if any(p in lower for p in (" instead", " instead of", "not that")):
+        # Corrective directive
+        directive_score += 0.3
+        signals.append("corrective")
+
+    # ---- Continuation: short affirmative / short text ----
+    # Strip trailing punctuation for exact-match check
+    stripped = lower.rstrip(".!?,;:")
+    if stripped in _CONTINUATION_TOKENS:
+        continuation_score += 0.8
+        signals.append(f"affirmative:{stripped}")
+    elif word_count <= 3 and any(tok in stripped for tok in _CONTINUATION_TOKENS):
+        continuation_score += 0.5
+        signals.append("short_affirmative")
+    if word_count <= 5 and not ends_with_question and directive_score < 0.3:
+        # Very short non-question with no imperative — likely continuation
+        continuation_score += 0.3
+        signals.append("short_non_question")
+
+    # ---- Pick winner ----
     scores = {
         "directive": directive_score,
         "continuation": continuation_score,
@@ -332,10 +166,12 @@ def classify(text: str) -> ClassificationResult:
     top_label = max(scores, key=lambda k: scores[k])
     top_score = scores[top_label]
 
+    # Confidence is the margin over second-best, normalized
     sorted_scores = sorted(scores.values(), reverse=True)
     margin = sorted_scores[0] - sorted_scores[1]
     confidence = min(1.0, top_score * 0.5 + margin * 0.5)
 
+    # Fallback: ambiguous → directive at low confidence
     if top_score < 0.2:
         return ClassificationResult("directive", 0.2, signals + ["fallback"])
 

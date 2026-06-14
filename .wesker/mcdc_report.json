@@ -1,0 +1,671 @@
+{
+  "verified": true,
+  "functions_checked": 4,
+  "functions_verified": 4,
+  "conditions_covered": 105,
+  "conditions_total": 105,
+  "results": [
+    {
+      "function": "_infer_workflow_mode",
+      "status": "verified",
+      "covered": 35,
+      "total": 35,
+      "details": [
+        {
+          "line": 34,
+          "swap": "== -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 34,
+          "swap": "== -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 34,
+          "swap": "== -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 34,
+          "swap": "== -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 34,
+          "swap": "== -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 47,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 47,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 47,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 47,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 47,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 49,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 49,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 49,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 49,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 49,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "> -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "< -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 43,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 43,
+          "swap": "< -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 45,
+          "swap": "> -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "< -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 45,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 45,
+          "swap": "< -> !=",
+          "killed": true,
+          "equivalent": false
+        }
+      ]
+    },
+    {
+      "function": "_skew_warnings",
+      "status": "verified",
+      "covered": 30,
+      "total": 30,
+      "details": [
+        {
+          "line": 55,
+          "swap": "> -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 55,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 55,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 55,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 55,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 57,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 57,
+          "swap": "> -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 63,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 63,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 63,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "> -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 63,
+          "swap": "< -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 63,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 63,
+          "swap": "< -> !=",
+          "killed": false,
+          "equivalent": true
+        }
+      ]
+    },
+    {
+      "function": "_compute_score",
+      "status": "verified",
+      "covered": 10,
+      "total": 10,
+      "details": [
+        {
+          "line": 177,
+          "swap": ">= -> >",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 177,
+          "swap": ">= -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 177,
+          "swap": ">= -> <",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 177,
+          "swap": ">= -> ==",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 177,
+          "swap": ">= -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 179,
+          "swap": "== -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 179,
+          "swap": "== -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 179,
+          "swap": "== -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 179,
+          "swap": "== -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 179,
+          "swap": "== -> >=",
+          "killed": false,
+          "equivalent": true
+        }
+      ]
+    },
+    {
+      "function": "assess",
+      "status": "verified",
+      "covered": 30,
+      "total": 30,
+      "details": [
+        {
+          "line": 90,
+          "swap": "< -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 90,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 90,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 90,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 90,
+          "swap": "< -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 124,
+          "swap": "== -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 124,
+          "swap": "== -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 124,
+          "swap": "== -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 124,
+          "swap": "== -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 124,
+          "swap": "== -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 92,
+          "swap": "< -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 92,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 92,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 92,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 92,
+          "swap": "< -> !=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 108,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 108,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 108,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 108,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 108,
+          "swap": "> -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 117,
+          "swap": "> -> >=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 117,
+          "swap": "> -> <",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 117,
+          "swap": "> -> <=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 117,
+          "swap": "> -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 117,
+          "swap": "> -> !=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 120,
+          "swap": "< -> <=",
+          "killed": false,
+          "equivalent": true
+        },
+        {
+          "line": 120,
+          "swap": "< -> >",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 120,
+          "swap": "< -> >=",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 120,
+          "swap": "< -> ==",
+          "killed": true,
+          "equivalent": false
+        },
+        {
+          "line": 120,
+          "swap": "< -> !=",
+          "killed": false,
+          "equivalent": true
+        }
+      ]
+    }
+  ]
+}

@@ -20,9 +20,19 @@ def _read_pyproject(root: Path) -> str:
     if not pyproject.is_file():
         return ""
     try:
-        return pyproject.read_text()
+        # errors="ignore": a malformed/non-UTF-8 manifest must not crash the
+        # scan (UnicodeDecodeError is a ValueError, not an OSError).
+        return pyproject.read_text(errors="ignore")
     except OSError:
         return ""
+
+
+# Directories never worth recursing into when sniffing source files — they
+# hold no first-party code but can be huge (data hauls, vendored deps) and
+# may contain non-UTF-8 blobs that would crash a naive read.
+_SKIP_DIRS = frozenset(
+    {".venv", "venv", "env", ".env", "node_modules", ".git", "data", "__pycache__"}
+)
 
 
 def _has_mcp_signal(pyproject_text: str, root: Path) -> bool:
@@ -48,10 +58,14 @@ def _has_mcp_signal(pyproject_text: str, root: Path) -> bool:
     for base in candidates:
         try:
             for py in base.rglob("*.py"):
+                if any(part in _SKIP_DIRS for part in py.parts):
+                    continue
                 if py.stat().st_size > 200_000:
                     continue
                 try:
-                    text = py.read_text()
+                    # errors="ignore" so a non-UTF-8 source file can't crash
+                    # the scan (UnicodeDecodeError is not an OSError).
+                    text = py.read_text(errors="ignore")
                 except OSError:
                     continue
                 if "from mcp.server" in text or "import fastmcp" in text or "from fastmcp" in text:

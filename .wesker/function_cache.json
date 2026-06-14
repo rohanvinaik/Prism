@@ -1,0 +1,162 @@
+{
+  "src/prism/sources.py::_is_human_prompt:46513a0905425c99": {
+    "function_key": "src/prism/sources.py::_is_human_prompt",
+    "categories_tested": 4,
+    "total_mutants": 9,
+    "total_killed": 9,
+    "total_survived": 0,
+    "total_equivalent": 0,
+    "universe_size": 9,
+    "survival_rate": 0.0,
+    "effective_kill_pct": 100,
+    "coverage_depth": "profiled",
+    "is_gateable": true,
+    "budget_exhausted": false,
+    "elapsed_ms": 11.2,
+    "per_category": [
+      {
+        "category": "VALUE",
+        "total": 3,
+        "killed": 3,
+        "survived": 0,
+        "equivalent": 0,
+        "killed_by_assertion": 0,
+        "killed_by_crash": 3,
+        "survival_rate": 0.0
+      },
+      {
+        "category": "TYPE",
+        "total": 3,
+        "killed": 3,
+        "survived": 0,
+        "equivalent": 0,
+        "killed_by_assertion": 0,
+        "killed_by_crash": 3,
+        "survival_rate": 0.0
+      },
+      {
+        "category": "BOUNDARY",
+        "total": 1,
+        "killed": 1,
+        "survived": 0,
+        "equivalent": 0,
+        "killed_by_assertion": 0,
+        "killed_by_crash": 1,
+        "survival_rate": 0.0
+      },
+      {
+        "category": "LOGICAL",
+        "total": 2,
+        "killed": 2,
+        "survived": 0,
+        "equivalent": 0,
+        "killed_by_assertion": 0,
+        "killed_by_crash": 2,
+        "survival_rate": 0.0
+      }
+    ],
+    "kill_matrix": {
+      "VALUE_0: replace constant with boundary value": [
+        "test_all_absent"
+      ],
+      "VALUE_1: replace constant with boundary value": [
+        "test_all_absent"
+      ],
+      "VALUE_2: replace constant with boundary value": [
+        "test_all_absent"
+      ],
+      "TYPE_0: replace isinstance with True": [
+        "test_all_absent"
+      ],
+      "TYPE_1: replace isinstance with True": [
+        "test_all_absent"
+      ],
+      "TYPE_2: replace isinstance with True": [
+        "test_all_absent"
+      ],
+      "BOUNDARY_0: off-by-one comparison": [
+        "test_all_absent"
+      ],
+      "LOGICAL_0: replace logical operator": [
+        "test_all_absent"
+      ],
+      "LOGICAL_1: replace logical operator": [
+        "test_all_absent"
+      ]
+    },
+    "killed_records": [
+      {
+        "mutant_id": "VALUE_0",
+        "mutant": "VALUE_0: replace constant with boundary value",
+        "category": "VALUE",
+        "elapsed_ms": 0.7,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "VALUE_1",
+        "mutant": "VALUE_1: replace constant with boundary value",
+        "category": "VALUE",
+        "elapsed_ms": 0.5,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "VALUE_2",
+        "mutant": "VALUE_2: replace constant with boundary value",
+        "category": "VALUE",
+        "elapsed_ms": 0.4,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "TYPE_0",
+        "mutant": "TYPE_0: replace isinstance with True",
+        "category": "TYPE",
+        "elapsed_ms": 0.5,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "TYPE_1",
+        "mutant": "TYPE_1: replace isinstance with True",
+        "category": "TYPE",
+        "elapsed_ms": 0.4,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "TYPE_2",
+        "mutant": "TYPE_2: replace isinstance with True",
+        "category": "TYPE",
+        "elapsed_ms": 0.4,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "BOUNDARY_0",
+        "mutant": "BOUNDARY_0: off-by-one comparison",
+        "category": "BOUNDARY",
+        "elapsed_ms": 0.4,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "LOGICAL_0",
+        "mutant": "LOGICAL_0: replace logical operator",
+        "category": "LOGICAL",
+        "elapsed_ms": 0.3,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      },
+      {
+        "mutant_id": "LOGICAL_1",
+        "mutant": "LOGICAL_1: replace logical operator",
+        "category": "LOGICAL",
+        "elapsed_ms": 0.4,
+        "killed_by": "crash",
+        "test": "test_all_absent"
+      }
+    ]
+  }
+}

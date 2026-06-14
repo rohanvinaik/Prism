@@ -166,6 +166,14 @@ class TestComputeEfficiency:
         events = [{"event": "session_start"}, {"event": "pre_compact"}]
         assert _compute_efficiency(events) == {}
 
+    def test_includes_workflow_mode_for_lintgate_bridge(self):
+        # Read-heavy session → "Explore"; surfaced so LintGate can adopt it.
+        events = [
+            {"event": "tool_use", "tool": "Read", "error": False} for _ in range(6)
+        ]
+        result = _compute_efficiency(events)
+        assert result["workflow_mode"] == "Explore"
+
 
 # =====================================================================
 # handle_post_tool_use — TYPE, VALUE
@@ -252,6 +260,50 @@ class TestHandlePostToolUse:
             )
         assert "systemMessage" in result
         assert "consecutive" in result["systemMessage"].lower()
+
+
+class TestHandleStopBridge:
+    """handle_stop enriches the LintGate bridge with workflow_mode + effect."""
+
+    def _patch_dirs(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("prism.engine.PRISM_DIR", tmp_path)
+        monkeypatch.setattr("prism.engine.SNAPSHOTS_DIR", tmp_path / "snapshots")
+        monkeypatch.setattr("prism.engine.SESSIONS_DIR", tmp_path / "sessions")
+        monkeypatch.setattr("prism.engine.DAILY_DIR", tmp_path / "daily")
+        monkeypatch.setattr("prism.engine.HEALTH_DIR", tmp_path / "health")
+        monkeypatch.setattr("prism.engine.BRIDGE_FILE", tmp_path / "bridge.json")
+
+    def test_bridge_includes_workflow_mode(self, tmp_path, monkeypatch):
+        self._patch_dirs(tmp_path, monkeypatch)
+        from prism.engine import append_event, read_bridge
+
+        append_event("s1", {"event": "session_start", "project": "/p"})
+        for _ in range(6):
+            append_event("s1", {"event": "tool_use", "tool": "Read", "error": False})
+        handle_stop({"session_id": "s1"})
+        bridge = read_bridge()
+        assert bridge["workflow_mode"] == "Explore"
+        assert "compaction_effect" not in bridge  # no boundaries
+
+    def test_bridge_includes_compaction_effect(self, tmp_path, monkeypatch):
+        self._patch_dirs(tmp_path, monkeypatch)
+        from prism.engine import append_event, read_bridge
+
+        append_event("s2", {"event": "session_start", "project": "/p"})
+        # pre-compact context, then a boundary, then >=5 post tool_use events
+        for _ in range(3):
+            append_event("s2", {"event": "tool_use", "tool": "Edit", "error": False})
+        append_event("s2", {"event": "pre_compact", "frame_injected": True, "tools_so_far": 3})
+        for i in range(6):
+            append_event(
+                "s2",
+                {"event": "tool_use", "tool": "Edit", "error": i < 2, "file_path": f"f{i}.py"},
+            )
+        handle_stop({"session_id": "s2"})
+        effect = read_bridge()["compaction_effect"]
+        assert effect["boundaries"] == 1
+        assert "mean_error_rate_delta" in effect
+        assert "mean_re_read_rate" in effect
 
 
 # =====================================================================

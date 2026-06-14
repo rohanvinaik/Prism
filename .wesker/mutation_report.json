@@ -1,0 +1,189 @@
+{
+  "total_killed": 1261,
+  "total_mutants": 1261,
+  "total_equivalent": 0,
+  "total_universe": 2227,
+  "kill_pct": 100,
+  "total_functions": 121,
+  "passes": 3,
+  "elapsed_ms": 4133,
+  "per_file": {
+    "src/prism/behavior.py": {
+      "functions": 5,
+      "killed": 82,
+      "total": 82,
+      "equivalent": 0,
+      "universe": 173,
+      "kill_pct": 100,
+      "elapsed_ms": 629
+    },
+    "src/prism/economics.py": {
+      "functions": 1,
+      "killed": 35,
+      "total": 35,
+      "equivalent": 0,
+      "universe": 118,
+      "kill_pct": 100,
+      "elapsed_ms": 271
+    },
+    "src/prism/engine.py": {
+      "functions": 14,
+      "killed": 84,
+      "total": 84,
+      "equivalent": 0,
+      "universe": 94,
+      "kill_pct": 100,
+      "elapsed_ms": 196
+    },
+    "src/prism/fix.py": {
+      "functions": 11,
+      "killed": 122,
+      "total": 122,
+      "equivalent": 0,
+      "universe": 187,
+      "kill_pct": 100,
+      "elapsed_ms": 249
+    },
+    "src/prism/forensics.py": {
+      "functions": 8,
+      "killed": 103,
+      "total": 103,
+      "equivalent": 0,
+      "universe": 168,
+      "kill_pct": 100,
+      "elapsed_ms": 281
+    },
+    "src/prism/health.py": {
+      "functions": 12,
+      "killed": 131,
+      "total": 131,
+      "equivalent": 0,
+      "universe": 261,
+      "kill_pct": 100,
+      "elapsed_ms": 252
+    },
+    "src/prism/hooks.py": {
+      "functions": 10,
+      "killed": 82,
+      "total": 82,
+      "equivalent": 0,
+      "universe": 127,
+      "kill_pct": 100,
+      "elapsed_ms": 238
+    },
+    "src/prism/pr_ready.py": {
+      "functions": 3,
+      "killed": 61,
+      "total": 61,
+      "equivalent": 0,
+      "universe": 151,
+      "kill_pct": 100,
+      "elapsed_ms": 239
+    },
+    "src/prism/recommend.py": {
+      "functions": 8,
+      "killed": 122,
+      "total": 122,
+      "equivalent": 0,
+      "universe": 237,
+      "kill_pct": 100,
+      "elapsed_ms": 364
+    },
+    "src/prism/server.py": {
+      "functions": 12,
+      "killed": 32,
+      "total": 32,
+      "equivalent": 0,
+      "universe": 32,
+      "kill_pct": 100,
+      "elapsed_ms": 41
+    },
+    "src/prism/snapshot.py": {
+      "functions": 1,
+      "killed": 34,
+      "total": 34,
+      "equivalent": 0,
+      "universe": 114,
+      "kill_pct": 100,
+      "elapsed_ms": 298
+    },
+    "src/prism/sources.py": {
+      "functions": 26,
+      "killed": 212,
+      "total": 212,
+      "equivalent": 0,
+      "universe": 235,
+      "kill_pct": 100,
+      "elapsed_ms": 437
+    },
+    "src/prism/trajectory.py": {
+      "functions": 6,
+      "killed": 103,
+      "total": 103,
+      "equivalent": 0,
+      "universe": 200,
+      "kill_pct": 100,
+      "elapsed_ms": 399
+    },
+    "src/prism/trends.py": {
+      "functions": 4,
+      "killed": 58,
+      "total": 58,
+      "equivalent": 0,
+      "universe": 130,
+      "kill_pct": 100,
+      "elapsed_ms": 241
+    }
+  },
+  "per_category": [
+    {
+      "category": "VALUE",
+      "total": 770,
+      "killed": 770,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "BOUNDARY",
+      "total": 75,
+      "killed": 75,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "LOGICAL",
+      "total": 145,
+      "killed": 145,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "SWAP",
+      "total": 108,
+      "killed": 108,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "ARITHMETIC",
+      "total": 147,
+      "killed": 147,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "STATE",
+      "total": 1,
+      "killed": 1,
+      "survived": 0,
+      "equivalent": 0
+    },
+    {
+      "category": "TYPE",
+      "total": 15,
+      "killed": 15,
+      "survived": 0,
+      "equivalent": 0
+    }
+  ]
+}

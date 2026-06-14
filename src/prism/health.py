@@ -87,7 +87,7 @@ def _resolver_hash(root: Path, manifest_name: str) -> str | None:
     if not manifest_path.is_file():
         return None
     try:
-        text = manifest_path.read_text()
+        text = manifest_path.read_text(errors="ignore")
     except OSError:
         return None
     inputs = _extract_resolver_inputs(text)
@@ -160,6 +160,58 @@ def _detect_lockfile(root: Path) -> dict:
         result["stale_reason"] = "resolver_input_changed" if stored_hash else "mtime_only"
         return result
     return {"found": None, "stale": False, "stale_reason": None}
+
+
+# Dependency-declaring manifests and the lockfiles that pin them. Used to name
+# exactly which dependency files a repo declares — so an agent orienting on the
+# project can't mistake "I didn't find one at a glance" for "there is none".
+_DEP_MANIFESTS: tuple[str, ...] = (
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "Pipfile",
+    "package.json",
+    "Cargo.toml",
+    "go.mod",
+)
+_DEP_LOCKS: tuple[str, ...] = (
+    "uv.lock",
+    "poetry.lock",
+    "Pipfile.lock",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "go.sum",
+    "requirements.txt",
+)
+# Lockfiles that are a single authoritative source of truth. requirements.txt
+# is deliberately excluded: when it coexists with one of these it's usually a
+# redundant second source that drifts from the real lock.
+_AUTHORITATIVE_LOCKS: frozenset[str] = frozenset(
+    {"uv.lock", "poetry.lock", "Pipfile.lock", "Cargo.lock"}
+)
+
+
+def _detect_dependency_sources(root: Path) -> dict:
+    """Enumerate ALL dependency manifests/locks present and flag redundancy.
+
+    Unlike _detect_lockfile (which stops at the first lock for scoring), this
+    names every dependency-declaring file so orientation is unambiguous, and
+    warns when requirements.txt coexists with an authoritative lockfile — the
+    exact "two competing sources of truth" smell that invites drift.
+    """
+    manifests = [f for f in _DEP_MANIFESTS if (root / f).is_file()]
+    locks = [f for f in _DEP_LOCKS if (root / f).is_file()]
+    redundant: list[str] = []
+    if "requirements.txt" in locks:
+        authoritative = [lk for lk in locks if lk in _AUTHORITATIVE_LOCKS]
+        if authoritative:
+            redundant.append(
+                f"requirements.txt coexists with {' + '.join(authoritative)} "
+                "(redundant second source — prefer one)"
+            )
+    return {"manifests": manifests, "locks": locks, "redundant": redundant}
 
 
 def _detect_git(root: Path) -> dict:
@@ -392,7 +444,7 @@ def _detect_secrets_hygiene(root: Path) -> dict:
     gitignore_path = root / ".gitignore"
     env_ignored = False
     if gitignore_path.is_file():
-        content = gitignore_path.read_text()
+        content = gitignore_path.read_text(errors="ignore")
         env_ignored = ".env" in content
     env_committed = (root / ".env").is_file() and not env_ignored
     return {"env_in_gitignore": env_ignored, "env_committed": env_committed}
@@ -436,7 +488,7 @@ def _detect_missing_cache_ignores(root: Path) -> dict:
     gitignore_path = root / ".gitignore"
     ignored: set[str] = set()
     if gitignore_path.is_file():
-        ignored = _gitignore_lines(gitignore_path.read_text())
+        ignored = _gitignore_lines(gitignore_path.read_text(errors="ignore"))
 
     present: list[str] = []
     missing: list[str] = []
@@ -485,7 +537,7 @@ def _has_pyproject_section(root: Path, tool: str) -> bool:
     if not pyproject.is_file():
         return False
     try:
-        return f"[tool.{tool}" in pyproject.read_text()
+        return f"[tool.{tool}" in pyproject.read_text(errors="ignore")
     except OSError:
         return False
 
@@ -587,6 +639,7 @@ def assess(project_path: str, profile: str | None = None) -> dict:
     checks = {
         "venv": _detect_venv(root),
         "lockfile": _detect_lockfile(root),
+        "dependency_sources": _detect_dependency_sources(root),
         "git": _detect_git(root),
         "ci": _detect_ci(root),
         "secrets": _detect_secrets_hygiene(root),
@@ -672,6 +725,15 @@ def check(project_path: str, profile: str | None = None) -> str:
 
     tools = [t for t, v in checks["toolchain"].items() if v]
     lines.append(f"- Toolchain: {', '.join(tools) if tools else 'none configured'}")
+
+    # Name the exact dependency files present so orientation is unambiguous —
+    # "none found at a glance" must not be mistaken for "none exist".
+    dep = checks["dependency_sources"]
+    manifests = " + ".join(dep["manifests"]) if dep["manifests"] else "none"
+    locks = " + ".join(dep["locks"]) if dep["locks"] else "none"
+    lines.append(f"- Dep files: manifests=[{manifests}] locks=[{locks}]")
+    for warning in dep["redundant"]:
+        lines.append(f"  ⚠ {warning}")
 
     summary = "\n".join(lines)
     aid = engine.save_snapshot("health", summary, {"project": project_path, **checks})

@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from typing import Any
 
-from . import compaction_trigger, engine, phase_matcher
+from . import compaction_trigger, engine, frame_check, phase_matcher
 
 # Anomaly thresholds
 CONSECUTIVE_ERROR_THRESHOLD = 3
@@ -96,6 +96,12 @@ def handle_post_tool_use(data: dict) -> dict:
 
     phase_matcher.record_tool(sid, tool_name, summary)
 
+    # Frame discipline: extract next_actions field from tool response if present,
+    # and persist to phase_state for the PreToolUse hook to consult on the next call.
+    next_actions, run_id = phase_matcher.extract_next_actions(tool_output)
+    if next_actions:
+        phase_matcher.update_next_actions(sid, next_actions, run_id)
+
     # Anomaly: consecutive errors
     if event.get("error"):
         events = engine.read_events(sid)
@@ -151,6 +157,12 @@ def _compute_efficiency(events: list[dict]) -> dict:
     # Efficiency score: 100 = perfect, penalize errors and compactions
     score = max(0, round(100 * (1 - error_rate) - (compactions * 5)))
 
+    # workflow_mode: surfaced in the bridge so LintGate can adopt Prism's
+    # tool-distribution classification instead of re-deriving it heuristically.
+    from .behavior import _infer_workflow_mode
+
+    workflow_mode = _infer_workflow_mode(tool_counts, len(tool_events))
+
     return {
         "tool_calls": len(tool_events),
         "tool_distribution": dict(tool_counts),
@@ -160,6 +172,32 @@ def _compute_efficiency(events: list[dict]) -> dict:
         "compactions": compactions,
         "duration_sec": duration_sec,
         "efficiency_score": score,
+        "workflow_mode": workflow_mode,
+    }
+
+
+def _summarize_compaction_effect(session_id: str) -> dict | None:
+    """Summarize how the session recovered after each compaction boundary.
+
+    Closes the loop with LintGate's pre_compact capsule: LintGate emits the
+    capsule (the frame), and this measures the mean post-compaction error-rate
+    delta and re-read rate over the session's boundaries, written into the
+    bridge for LintGate to read back. Returns None when there are no boundaries.
+    """
+    from . import compaction_analysis
+
+    boundaries = [b for b in compaction_analysis.analyze_session(session_id) if b.post_tools >= 5]
+    if not boundaries:
+        return None
+    n = len(boundaries)
+    mean_delta = sum(b.error_rate_delta for b in boundaries) / n
+    mean_post_err = sum(b.post_error_rate for b in boundaries) / n
+    mean_re_read = sum(b.re_read_rate for b in boundaries) / n
+    return {
+        "boundaries": n,
+        "mean_error_rate_delta": round(mean_delta, 3),
+        "mean_post_error_rate": round(mean_post_err, 3),
+        "mean_re_read_rate": round(mean_re_read, 3),
     }
 
 
@@ -182,13 +220,15 @@ def handle_stop(data: dict) -> dict:
     engine.append_daily_summary(summary)
 
     # Write bridge file for LintGate consumption
-    engine.write_bridge(
-        {
-            "session_id": sid,
-            "project": project,
-            **efficiency,
-        }
-    )
+    bridge_payload = {
+        "session_id": sid,
+        "project": project,
+        **efficiency,
+    }
+    compaction_effect = _summarize_compaction_effect(sid)
+    if compaction_effect is not None:
+        bridge_payload["compaction_effect"] = compaction_effect
+    engine.write_bridge(bridge_payload)
 
     # Anomaly: high error rate
     if efficiency["error_rate"] > SESSION_ERROR_RATE_THRESHOLD:
@@ -335,6 +375,7 @@ HANDLERS = {
     "Stop": handle_stop,
     "PreCompact": handle_pre_compact,
     "UserPromptSubmit": handle_user_prompt,
+    "PreToolUse": frame_check.handle_pre_tool_use,
 }
 
 
