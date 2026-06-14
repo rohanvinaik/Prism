@@ -740,4 +740,35 @@ def check(project_path: str, profile: str | None = None) -> str:
     lines.append("")
     lines.append(f'_Details: prism_details("{aid}")_')
 
+    # Shadow: contribute the operation layer, then surface the composite fingerprint
+    # in-line. Best-effort — fingerprint I/O must never break the health check.
+    try:
+        from . import shadow
+
+        lf = checks["lockfile"]
+        dep = checks["dependency_sources"]
+        op_data = {
+            "setup_score": score,
+            "venv": checks["venv"].get("path") if checks["venv"].get("found") else None,
+            "lockfile": lf.get("found"),
+            "lockfile_stale": lf.get("stale"),
+            "git_clean": checks["git"].get("clean"),
+            "ci": checks["ci"].get("type") if checks["ci"].get("found") else None,
+            "toolchain": tools,
+            "dependency_manifests": dep.get("manifests", []),
+            "dependency_locks": dep.get("locks", []),
+            "dependency_redundant": dep.get("redundant", []),
+        }
+        headline = (
+            f"setup {score}/100 · venv {op_data['venv'] or '—'} · "
+            f"lock {op_data['lockfile'] or 'none'}{' (stale)' if op_data['lockfile_stale'] else ''}"
+        )
+        shadow.write("operation", headline, op_data, repo=project_path)
+        composite = shadow.render(project_path)
+        if composite:
+            lines.append("")
+            lines.append(composite)
+    except Exception:
+        pass
+
     return "\n".join(lines)
