@@ -6,7 +6,7 @@ Covers: VALUE, SWAP categories across auto-fixer.
 import json
 from unittest.mock import patch
 
-from prism.fix import FIX_REGISTRY, _run_cmd
+from prism.fix import FIX_REGISTRY, _exclude_bloated_paths, _run_cmd
 
 # =====================================================================
 # _run_cmd — VALUE
@@ -65,6 +65,42 @@ class TestFixRegistry:
         content = gitignore.read_text()
         assert "__pycache__/" in content
         assert ".env" in content
+
+    def test_git_init_excludes_bloated_dir(self, tmp_path):
+        """A large-aggregate data dir is gitignored, not committed.
+
+        Most data files fall under any per-file size limit; the bloat only
+        shows in aggregate, so the guard sums per top-level path.
+        """
+        _run_cmd(["git", "init"], str(tmp_path))
+        data = tmp_path / "data"
+        data.mkdir()
+        # Many small files summing over the test threshold.
+        for i in range(5):
+            (data / f"f{i}.csv").write_text("x" * 100)
+        (tmp_path / "main.py").write_text("print('hi')\n")
+
+        excluded = _exclude_bloated_paths(str(tmp_path), threshold_bytes=200)
+
+        assert excluded == ["data"]
+        content = (tmp_path / ".gitignore").read_text()
+        assert "data/" in content
+        assert "main.py" not in content
+
+    def test_git_init_no_bloat_no_changes(self, tmp_path):
+        """Without large paths, no .gitignore entries are added."""
+        _run_cmd(["git", "init"], str(tmp_path))
+        (tmp_path / "main.py").write_text("print('hi')\n")
+        excluded = _exclude_bloated_paths(str(tmp_path), threshold_bytes=200)
+        assert excluded == []
+
+    def test_git_init_full_fix_creates_gitignore_and_commits(self, tmp_path):
+        """End-to-end: git init guarantees .gitignore before staging."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='t'\n")
+        ok, msg = FIX_REGISTRY["Initialize git"](str(tmp_path))
+        assert ok is True
+        assert (tmp_path / ".gitignore").is_file()
+        assert (tmp_path / ".git").is_dir()
 
     def test_gitignore_idempotent(self, tmp_path):
         (tmp_path / ".gitignore").write_text("existing\n")

@@ -93,13 +93,93 @@ def _fix_stale_lockfile(project_path: str) -> tuple[bool, str]:
     return ok, msg
 
 
+# Aggregate size at or above which a top-level path is excluded from the
+# initial commit. Tuned to catch data dumps / vendored asset trees whose
+# individual files fall under any per-file size limit but sum to bloat.
+DEFAULT_GITINIT_BLOAT_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _exclude_bloated_paths(
+    project_path: str, threshold_bytes: int = DEFAULT_GITINIT_BLOAT_BYTES
+) -> list[str]:
+    """Append top-level paths with large untracked aggregate size to .gitignore.
+
+    A fresh ``git init`` + ``git add -A`` will happily stage a multi-GB data
+    directory. Such files are usually each under any per-file size threshold,
+    so the bloat is only visible in aggregate. We sum untracked (non-ignored)
+    file sizes per top-level path and ignore any path over the threshold, so
+    the initial commit excludes data dumps, vendored assets, etc.
+
+    Returns the list of excluded top-level paths (empty if none).
+    """
+    root = Path(project_path)
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=project_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+    if result.returncode != 0:
+        return []
+
+    sizes: dict[str, int] = {}
+    for rel in result.stdout.splitlines():
+        rel = rel.strip()
+        if not rel:
+            continue
+        top = rel.split("/", 1)[0]
+        try:
+            sizes[top] = sizes.get(top, 0) + (root / rel).stat().st_size
+        except OSError:
+            continue
+
+    bloated = sorted(name for name, total in sizes.items() if total > threshold_bytes)
+    if not bloated:
+        return []
+
+    gitignore = root / ".gitignore"
+    existing = gitignore.read_text() if gitignore.is_file() else ""
+    existing_entries = {line.strip().rstrip("/") for line in existing.splitlines()}
+    additions = []
+    for name in bloated:
+        if name in existing_entries:
+            continue
+        suffix = "/" if (root / name).is_dir() else ""
+        additions.append(f"{name}{suffix}")
+    if additions:
+        block = (
+            "# Prism: excluded from initial commit (large aggregate size)\n"
+            + "\n".join(additions)
+            + "\n"
+        )
+        prefix = "\n" if existing and not existing.endswith("\n") else ""
+        gitignore.write_text(existing + prefix + block)
+    return bloated
+
+
 @_register("Initialize git")
 def _fix_git_init(project_path: str) -> tuple[bool, str]:
     ok, msg = _run_cmd(["git", "init"], project_path)
     if not ok:
         return ok, msg
+    # Guarantee a .gitignore BEFORE staging so caches/venvs/build artifacts
+    # never enter the initial commit.
+    _fix_gitignore(project_path)
+    # Guard against aggregate bloat: a fresh `git add -A` will stage a
+    # multi-GB data dir whose files are each under any per-file size limit.
+    excluded = _exclude_bloated_paths(project_path)
     _run_cmd(["git", "add", "-A"], project_path)
-    return _run_cmd(["git", "commit", "-m", "initial commit"], project_path)
+    ok, msg = _run_cmd(["git", "commit", "-m", "initial commit"], project_path)
+    if ok and excluded:
+        msg += (
+            f"\nExcluded {len(excluded)} large path(s) from initial commit "
+            f"(added to .gitignore): {', '.join(excluded)}"
+        )
+    return ok, msg
 
 
 @_register("Add .gitignore")
