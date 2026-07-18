@@ -16,6 +16,13 @@
 
 Every token you spend, every tool you call, every subagent you spawn, every place a session compacts — Claude Code already writes all of it to `~/.claude/`. The record is complete, and nobody reads it. Prism reads it: token economics, behavioral signals, session forensics, and project-setup health, computed straight from the logs on disk. No inference calls, no agents spawned, and — because the hooks that collect the data are silent writers — zero tokens added to the session it is watching.
 
+## What you get, as the record deepens
+
+- **First session** — `prism_health("/path/to/project")` scores the setup (venv, lockfile, git, CI, secrets, toolchain) from 0–100; `prism_recommend` proposes fixes; `prism_fix` applies them deterministically.
+- **After a few sessions** — `prism_snapshot("week")` shows token burn, cache efficiency, tool distribution, read/edit ratios; `prism_economics` breaks down API consumption and subagent cost; `prism_behavior` names the workflow mode you were in (Explore, Surgical, Shell-heavy, Delegating, Balanced).
+- **Over time** — `prism_trends` catches efficiency drift, error-rate changes, and tool-distribution shifts from pre-aggregated daily summaries; `prism_trajectory` tracks quality and decision trends; `prism_forensics` reconstructs any session in full.
+- **Before merging** — `prism_pr_ready("/path/to/project")` is a composite go/no-go: git clean, health score, lockfile freshness, session error rate.
+
 ## Setup
 
 ```bash
@@ -45,13 +52,6 @@ uv tool install prism-mcp        # or: pip install prism-mcp
 ```
 
 That is the whole install. Start a session and Prism begins collecting; after a few, every tool returns real analytics.
-
-## What you get, as the record deepens
-
-- **First session** — `prism_health("/path/to/project")` scores the setup (venv, lockfile, git, CI, secrets, toolchain) from 0–100; `prism_recommend` proposes fixes; `prism_fix` applies them deterministically.
-- **After a few sessions** — `prism_snapshot("week")` shows token burn, cache efficiency, tool distribution, read/edit ratios; `prism_economics` breaks down API consumption and subagent cost; `prism_behavior` names the workflow mode you were in (Explore, Surgical, Shell-heavy, Delegating, Balanced).
-- **Over time** — `prism_trends` catches efficiency drift, error-rate changes, and tool-distribution shifts from pre-aggregated daily summaries; `prism_trajectory` tracks quality and decision trends; `prism_forensics` reconstructs any session in full.
-- **Before merging** — `prism_pr_ready("/path/to/project")` is a composite go/no-go: git clean, health score, lockfile freshness, session error rate.
 
 ## How it works
 
@@ -109,10 +109,6 @@ Every tool takes an optional `project` parameter (substring match) to scope its 
 - **Compact-first.** Full results on disk, ~300-token summaries to the model, drill-down on demand.
 - **Graceful degradation.** A missing data source returns an empty result — no crash, no error, just one fewer section in the output.
 
-## License
+---
 
-MIT
-
-## Author
-
-Built by Rohan Vinaik with Claude Opus 4.6.
+MIT — Rohan Vinaik
