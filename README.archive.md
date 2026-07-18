@@ -1,6 +1,6 @@
 # Prism
 
-**Every Claude Code session writes down exactly what it did. Prism is the part that reads it back.**
+**Usage analytics for Claude Code.** Token economics, behavioral signals, session forensics — all from data Claude Code already writes to disk. Zero LLM inference.
 
 [![CI](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml/badge.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=rohanvinaik_Prism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=rohanvinaik_Prism)
@@ -11,10 +11,6 @@
 [![Mutation Kill Rate](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-kill-rate.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![MC/DC](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mcdc.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
 [![Mutation Sampling](https://raw.githubusercontent.com/rohanvinaik/Prism/badges/.github/badges/mutation-sampling.svg)](https://github.com/rohanvinaik/Prism/actions/workflows/spec-badges.yml)
-
-`13 MCP tools · ~300 tokens per call · Zero inference · Read-only`
-
-Every token you spend, every tool you call, every subagent you spawn, every place a session compacts — Claude Code already writes all of it to `~/.claude/`. The record is complete, and nobody reads it. Prism reads it: token economics, behavioral signals, session forensics, and project-setup health, computed straight from the logs on disk. No inference calls, no agents spawned, and — because the hooks that collect the data are silent writers — zero tokens added to the session it is watching.
 
 ## Setup
 
@@ -44,18 +40,21 @@ uv tool install prism-mcp        # or: pip install prism-mcp
 }
 ```
 
-That is the whole install. Start a session and Prism begins collecting; after a few, every tool returns real analytics.
+That's it. Start a Claude Code session and Prism begins collecting data. After a few sessions, every tool returns meaningful analytics.
 
-## What you get, as the record deepens
+## What you get
 
-- **First session** — `prism_health("/path/to/project")` scores the setup (venv, lockfile, git, CI, secrets, toolchain) from 0–100; `prism_recommend` proposes fixes; `prism_fix` applies them deterministically.
-- **After a few sessions** — `prism_snapshot("week")` shows token burn, cache efficiency, tool distribution, read/edit ratios; `prism_economics` breaks down API consumption and subagent cost; `prism_behavior` names the workflow mode you were in (Explore, Surgical, Shell-heavy, Delegating, Balanced).
-- **Over time** — `prism_trends` catches efficiency drift, error-rate changes, and tool-distribution shifts from pre-aggregated daily summaries; `prism_trajectory` tracks quality and decision trends; `prism_forensics` reconstructs any session in full.
-- **Before merging** — `prism_pr_ready("/path/to/project")` is a composite go/no-go: git clean, health score, lockfile freshness, session error rate.
+**First session:** `prism_health("/path/to/project")` scores your project setup (venv, lockfile, git, CI, secrets, toolchain) from 0-100. `prism_recommend` suggests fixes. `prism_fix` applies them deterministically.
+
+**After a few sessions:** `prism_snapshot("week")` shows token burn, cache efficiency, tool distribution, read/edit ratios. `prism_economics` breaks down API consumption and subagent costs. `prism_behavior` detects workflow modes (Explore, Surgical, Shell-heavy, Delegating, Balanced).
+
+**Over time:** `prism_trends` detects efficiency drift, error rate changes, and tool distribution shifts from pre-aggregated daily summaries. `prism_trajectory` shows quality and decision trends. `prism_forensics` reconstructs any session in detail.
+
+**Before merging:** `prism_pr_ready("/path/to/project")` is a composite go/no-go gate — git clean, health score, lockfile freshness, session error rate.
 
 ## How it works
 
-Every tool writes its full result to disk and returns ~300 tokens plus a snapshot ID; you drill into the rest on demand with `prism_details(id, section)`. The hooks are silent writers, so watching a session costs that session nothing.
+Every tool writes full results to disk and returns ~300 tokens + a snapshot ID. Drill into the full data on demand with `prism_details(id, section)`. Hooks are silent writers (zero token cost to your session). No agents spawned, no inference calls.
 
 ```
 ~/.claude/prism/
@@ -65,7 +64,9 @@ Every tool writes its full result to disk and returns ~300 tokens plus a snapsho
 └── health/{project_hash}.json    # Project setup maturity state
 ```
 
-**Core data sources** — these work for anyone with Claude Code installed:
+### Core data sources
+
+These work for everyone with Claude Code installed:
 
 | Source | What Prism reads |
 |--------|-----------------|
@@ -73,7 +74,9 @@ Every tool writes its full result to disk and returns ~300 tokens plus a snapsho
 | stats-cache (`~/.claude/stats-cache.json`) | Daily activity rollups |
 | Prism hook events (`~/.claude/prism/`) | Real-time tool errors, output sizes, compaction boundaries |
 
-**Optional integrations** — auto-detected if present; absent ones simply drop their section, nothing breaks:
+### Optional integrations
+
+Prism auto-detects these if present. If they're not installed, those sections simply don't appear in output — nothing breaks.
 
 | Integration | What it adds |
 |-------------|-------------|
@@ -100,14 +103,14 @@ Every tool writes its full result to disk and returns ~300 tokens plus a snapsho
 | `prism_compaction_analysis` | A/B validation of narrative-frame injection at compaction boundaries |
 | `prism_details` | Drill into any snapshot by section |
 
-Every tool takes an optional `project` parameter (substring match) to scope its results.
+All tools accept an optional `project` parameter (substring match) to scope results.
 
 ## Design principles
 
-- **Read-only.** Prism never touches external data — every write lands in `~/.claude/prism/`.
-- **No inference.** It runs on JSON parsing and file stats; the recommend → fix → gate loop is pure computation.
-- **Compact-first.** Full results on disk, ~300-token summaries to the model, drill-down on demand.
-- **Graceful degradation.** A missing data source returns an empty result — no crash, no error, just one fewer section in the output.
+- **Read-only.** Prism never modifies external data. All writes go to `~/.claude/prism/`.
+- **No inference.** Everything runs on JSON parsing and file stats. The recommend-fix-gate loop is pure computation.
+- **Compact-first.** Full results on disk, ~300-token summaries to the LLM. Drill-down on demand.
+- **Graceful degradation.** Missing data sources return empty results. No crashes, no error messages, just fewer sections in the output.
 
 ## License
 
