@@ -49,7 +49,7 @@ uv tool install prism-mcp        # or: pip install prism-mcp
 
 Add the server to your MCP config, and wire four hooks in `~/.claude/settings.json` — `PostToolUse`, `SessionStart`, `PreCompact`, and `Stop`, each running `prism-hook`. That is the whole install. Start a session and Prism begins collecting; after a few, every tool returns real analytics. It reads from the paths Claude Code already writes (`~/.claude/projects/`, `stats-cache.json`, and its own hook events in `~/.claude/prism/`), and it auto-detects optional signals from RTK, LintGate, Continuity, and Mneme — an absent one simply drops its section, nothing breaks.
 
-Prism is also one third of a repo-hygiene trio: it scores per-repo setup maturity, [SetupAtlas](https://github.com/rohanvinaik/SetupAtlas) covers the machine, and [LintGate](https://github.com/rohanvinaik/LintGate) covers the Python. Point the three at a project and it walks to a clean baseline.
+Prism is also one third of a repo-hygiene trio: it scores per-repo setup maturity, SetupAtlas covers the machine, and [LintGate](https://github.com/rohanvinaik/LintGate) covers the Python. Point the three at a project and it walks to a clean baseline.
 
 ## The tools
 
